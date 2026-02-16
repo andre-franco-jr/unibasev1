@@ -1,0 +1,17 @@
+{
+  "project": "UniEnergy.app",
+  "platform": "ios",
+  "github": {
+    "owner": "andre-franco-jr",
+    "repo": "unibasev1"
+  },
+  "ios": {
+    "path": "ios"
+  },
+  "flutter": {
+    "version": "3.38.9",
+    "watch": {}
+  },
+  "reactNative": {},
+  "mobai": {}
+}
