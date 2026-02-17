@@ -127,13 +127,21 @@ class _DashboardTabState extends State<DashboardTab> {
                 child: DropdownButton<String>(
                   value: _geradorSelecionado,
                   isExpanded: true,
-                  hint: const Text(
-                    'Geradores',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
+                  hint: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.solar_power_rounded,
+                          color: Color(0xFFFFB800), size: 20),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Geradores',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
                   ),
                   icon: const Icon(Icons.expand_more,
                       color: AppColors.accent, size: 24),
@@ -249,10 +257,10 @@ class _DashboardTabState extends State<DashboardTab> {
 
   // ── EMPTY STATE ──
   Widget _emptyState() {
-    return Center(
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
+        children: [
           Icon(Icons.touch_app_outlined, color: Colors.white24, size: 40),
           SizedBox(height: 10),
           Text('Selecione um gerador para ver os dados',
@@ -443,8 +451,12 @@ class _DashboardTabState extends State<DashboardTab> {
     for (final d in _graficoData) {
       final r = _toDouble(d['realizado_inversor']);
       final p = _toDouble(d['prognostico']);
+      final c = _toDouble(d['compensado']);
+      final f = _toDouble(d['faturado']);
       if (r > maxY) maxY = r;
       if (p > maxY) maxY = p;
+      if (c > maxY) maxY = c;
+      if (f > maxY) maxY = f;
     }
 
     return Container(
@@ -463,103 +475,147 @@ class _DashboardTabState extends State<DashboardTab> {
       child: Column(
         children: [
           // Legenda
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _legend(const Color(0xFF004D66), 'Prognóstico'),
-              const SizedBox(width: 16),
-              _legend(AppColors.accent, 'Realizado'),
-            ],
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _legend(const Color(0xFF004D66), 'Prognóstico'),
+                  const SizedBox(width: 28),
+                  _legend(AppColors.accent, 'Realizado'),
+                  const SizedBox(width: 28),
+                  _legend(const Color(0xFF10b981), 'Faturado'),
+                  const SizedBox(width: 28),
+                  _legend(const Color(0xFFef4444), 'Compensado'),
+                ],
+              ),
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 16),
           SizedBox(
-            height: 210,
-            child: BarChart(
-              BarChartData(
-                alignment: BarChartAlignment.spaceAround,
-                maxY: maxY * 1.2,
-                barTouchData: BarTouchData(
-                  touchTooltipData: BarTouchTooltipData(
-                    tooltipBgColor: const Color(0xFF003a4d),
-                    getTooltipItem: (group, gi, rod, ri) {
-                      final label = ri == 0 ? 'Prognóstico' : 'Realizado';
-                      return BarTooltipItem(
-                        '${meses[gi]}\n$label\n${_fmt(rod.toY)} kWh',
-                        const TextStyle(color: Colors.white, fontSize: 11),
+            height: 380,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SizedBox(
+                width: _graficoData.length < 8
+                    ? null
+                    : MediaQuery.of(context).size.width *
+                        (_graficoData.length / 6),
+                child: BarChart(
+                  BarChartData(
+                    alignment: BarChartAlignment.spaceBetween,
+                    maxY: maxY * 1.2,
+                    barTouchData: BarTouchData(
+                      touchTooltipData: BarTouchTooltipData(
+                        tooltipBgColor: const Color(0xFF003a4d),
+                        getTooltipItem: (group, gi, rod, ri) {
+                          final labels = [
+                            'Prognóstico',
+                            'Realizado',
+                            'Faturado',
+                            'Compensado'
+                          ];
+                          final label =
+                              ri < labels.length ? labels[ri] : 'Desconhecido';
+                          return BarTooltipItem(
+                            '${meses[gi]}\n$label\n${_fmt(rod.toY)} kWh',
+                            const TextStyle(color: Colors.white, fontSize: 11),
+                          );
+                        },
+                      ),
+                    ),
+                    titlesData: FlTitlesData(
+                      bottomTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          getTitlesWidget: (v, m) {
+                            final i = v.toInt();
+                            if (i < 0 || i >= meses.length) {
+                              return const Text('');
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 5),
+                              child: Text(meses[i],
+                                  style: const TextStyle(
+                                      fontSize: 9, color: Color(0xFF6b7280))),
+                            );
+                          },
+                        ),
+                      ),
+                      leftTitles: AxisTitles(
+                        sideTitles: SideTitles(
+                          showTitles: true,
+                          reservedSize: 30,
+                          interval: maxY * 1.2 / 5,
+                          getTitlesWidget: (v, m) => Text(
+                            _short(v),
+                            style: const TextStyle(
+                                fontSize: 9, color: Color(0xFF6b7280)),
+                          ),
+                        ),
+                      ),
+                      topTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false)),
+                      rightTitles: const AxisTitles(
+                          sideTitles: SideTitles(showTitles: false)),
+                    ),
+                    gridData: FlGridData(
+                      show: true,
+                      drawVerticalLine: false,
+                      getDrawingHorizontalLine: (_) => const FlLine(
+                        color: Color(0xFFe5e7eb),
+                        strokeWidth: 1,
+                      ),
+                    ),
+                    borderData: FlBorderData(show: false),
+                    barGroups: _graficoData.asMap().entries.map((e) {
+                      final d = e.value;
+                      return BarChartGroupData(
+                        x: e.key,
+                        barRods: [
+                          BarChartRodData(
+                            toY: _toDouble(d['prognostico']),
+                            color: const Color(0xFF004D66),
+                            width: 7,
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(3),
+                              topRight: Radius.circular(3),
+                            ),
+                          ),
+                          BarChartRodData(
+                            toY: _toDouble(d['realizado_inversor']),
+                            color: AppColors.accent,
+                            width: 7,
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(3),
+                              topRight: Radius.circular(3),
+                            ),
+                          ),
+                          BarChartRodData(
+                            toY: _toDouble(d['faturado']),
+                            color: const Color(0xFF10b981),
+                            width: 7,
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(3),
+                              topRight: Radius.circular(3),
+                            ),
+                          ),
+                          BarChartRodData(
+                            toY: _toDouble(d['compensado']),
+                            color: const Color(0xFFef4444),
+                            width: 7,
+                            borderRadius: const BorderRadius.only(
+                              topLeft: Radius.circular(3),
+                              topRight: Radius.circular(3),
+                            ),
+                          ),
+                        ],
                       );
-                    },
+                    }).toList(),
                   ),
                 ),
-                titlesData: FlTitlesData(
-                  bottomTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      getTitlesWidget: (v, m) {
-                        final i = v.toInt();
-                        if (i < 0 || i >= meses.length) {
-                          return const Text('');
-                        }
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 5),
-                          child: Text(meses[i],
-                              style: const TextStyle(
-                                  fontSize: 9, color: Color(0xFF6b7280))),
-                        );
-                      },
-                    ),
-                  ),
-                  leftTitles: AxisTitles(
-                    sideTitles: SideTitles(
-                      showTitles: true,
-                      reservedSize: 30,
-                      interval: maxY * 1.2 / 5,
-                      getTitlesWidget: (v, m) => Text(
-                        _short(v),
-                        style: const TextStyle(
-                            fontSize: 9, color: Color(0xFF6b7280)),
-                      ),
-                    ),
-                  ),
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                ),
-                gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  getDrawingHorizontalLine: (_) => const FlLine(
-                    color: Color(0xFFe5e7eb),
-                    strokeWidth: 1,
-                  ),
-                ),
-                borderData: FlBorderData(show: false),
-                barGroups: _graficoData.asMap().entries.map((e) {
-                  final d = e.value;
-                  return BarChartGroupData(
-                    x: e.key,
-                    barRods: [
-                      BarChartRodData(
-                        toY: _toDouble(d['prognostico']),
-                        color: const Color(0xFF004D66),
-                        width: 7,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(3),
-                          topRight: Radius.circular(3),
-                        ),
-                      ),
-                      BarChartRodData(
-                        toY: _toDouble(d['realizado_inversor']),
-                        color: AppColors.accent,
-                        width: 7,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(3),
-                          topRight: Radius.circular(3),
-                        ),
-                      ),
-                    ],
-                  );
-                }).toList(),
               ),
             ),
           ),
@@ -595,7 +651,7 @@ class _DashboardTabState extends State<DashboardTab> {
 
   String _fmt(double v) {
     if (v >= 1000) {
-      return '${(v / 1000).toStringAsFixed(1)}'.replaceAll('.', ',') + 'k';
+      return '${'${(v / 1000).toStringAsFixed(1)}'.replaceAll('.', ',')}k';
     }
     return v.toStringAsFixed(v % 1 == 0 ? 0 : 2).replaceAll('.', ',');
   }

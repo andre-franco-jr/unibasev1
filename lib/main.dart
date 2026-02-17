@@ -29,12 +29,12 @@ class UnienergyApp extends StatelessWidget {
         ),
         useMaterial3: true,
         fontFamily: 'Viga',
-        appBarTheme: AppBarTheme(
+        appBarTheme: const AppBarTheme(
           centerTitle: true,
           elevation: 2,
           backgroundColor: AppColors.primaryDark,
           foregroundColor: AppColors.white,
-          titleTextStyle: const TextStyle(
+          titleTextStyle: TextStyle(
             fontFamily: 'Viga',
             fontSize: 20,
             fontWeight: FontWeight.bold,

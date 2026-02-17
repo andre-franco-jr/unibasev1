@@ -32,9 +32,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final usinas = await ApiService.getUsinas();
 
       // Validação segura (sem throw)
-      final validUsinas = usinas
-          .where((u) => u.codigoGerador.isNotEmpty)
-          .toList();
+      final validUsinas =
+          usinas.where((u) => u.codigoGerador.isNotEmpty).toList();
 
       if (validUsinas.isEmpty) {
         if (mounted) {

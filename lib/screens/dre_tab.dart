@@ -16,20 +16,20 @@ class DRETab extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.accent.withOpacity(0.25)),
           ),
-          child: Column(
+          child: const Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.analytics_outlined,
+              Icon(Icons.analytics_outlined,
                   color: AppColors.accent, size: 48),
-              const SizedBox(height: 16),
-              const Text('DRE',
+              SizedBox(height: 16),
+              Text('DRE',
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
                   )),
-              const SizedBox(height: 6),
-              const Text('Em breve',
+              SizedBox(height: 6),
+              Text('Em breve',
                   style: TextStyle(color: Colors.white54, fontSize: 14)),
             ],
           ),

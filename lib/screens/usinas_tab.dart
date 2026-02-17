@@ -315,13 +315,21 @@ class UsinasTabState extends State<UsinasTab> {
                       child: DropdownButton<String>(
                         value: _geradorSelecionado,
                         isExpanded: true,
-                        hint: const Text(
-                          'Usinas',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        hint: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.solar_power_rounded,
+                                color: Color(0xFFFFB800), size: 20),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Usinas',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
                         ),
                         icon: const Icon(Icons.expand_more,
                             color: AppColors.accent, size: 24),
@@ -360,10 +368,10 @@ class UsinasTabState extends State<UsinasTab> {
 
   // ── EMPTY STATE ──
   Widget _buildEmptyState() {
-    return Center(
+    return const Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
+        children: [
           Icon(Icons.area_chart_outlined, color: Colors.white24, size: 48),
           SizedBox(height: 12),
           Text(
@@ -890,7 +898,7 @@ class UsinasTabState extends State<UsinasTab> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _legendItem(const Color(0xFF004D66), 'Prognóstico'),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 28),
                   _legendItem(AppColors.accent, 'Produção'),
                 ],
               ),
@@ -913,7 +921,7 @@ class UsinasTabState extends State<UsinasTab> {
         producao.isEmpty ? 10 : producao.reduce((a, b) => a > b ? a : b) * 1.2;
 
     // Mostrar rótulos a cada 2 horas no eixo X
-    final step = 2;
+    const step = 2;
 
     return LineChart(
       LineChartData(

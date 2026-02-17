@@ -81,8 +81,8 @@ class _DocumentosTabState extends State<DocumentosTab> {
                 bottom: BorderSide(color: AppColors.accent, width: 2),
               ),
             ),
-            child: Row(
-              children: const [
+            child: const Row(
+              children: [
                 Icon(Icons.folder, color: Colors.white, size: 16),
                 SizedBox(width: 8),
                 Text(
