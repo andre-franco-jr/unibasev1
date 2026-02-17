@@ -48,19 +48,6 @@ flutter pub get
 ```bash
 flutter run
 ```
-
-## 🔐 Credenciais de Login
-
-### Administrador
-- **Usuário:** `allan`
-- **Senha:** `admin`
-- **Acesso:** Todas as usinas
-
-### Investidor
-- **Usuário:** `teste2`
-- **Senha:** `teste2`
-- **Acesso:** Geradores específicos + 4 abas
-
 ## 📱 Telas do Aplicativo
 
 ### Tela de Login
