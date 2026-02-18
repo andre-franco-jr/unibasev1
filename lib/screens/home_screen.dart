@@ -6,6 +6,7 @@ import 'usinas_tab.dart';
 import 'dashboard_tab.dart';
 import 'documentos_tab.dart';
 import 'dre_tab.dart';
+import 'financeiro_tab.dart';
 
 // ═══════════════════════════════════════════════
 // TELA PRINCIPAL COM ABAS
@@ -42,6 +43,7 @@ class _HomeScreenState extends State<HomeScreen> {
       DashboardTab(key: _dashboardKey),
       UsinasTab(key: _usinasKey),
       DocumentosTab(key: _documentosKey),
+      const FinanceiroTab(),
       const DRETab(),
     ];
 
@@ -127,6 +129,11 @@ class _HomeScreenState extends State<HomeScreen> {
               icon: Icon(Icons.folder_outlined),
               activeIcon: Icon(Icons.folder),
               label: 'Documentos',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.paid_outlined),
+              activeIcon: Icon(Icons.paid),
+              label: 'Financeiro',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.analytics_outlined),

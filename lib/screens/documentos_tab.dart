@@ -73,30 +73,6 @@ class _DocumentosTabState extends State<DocumentosTab> {
       color: const Color(0xFF001f2e),
       child: Column(
         children: [
-          // ── HEADER FIXO ──
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: const BoxDecoration(
-              border: Border(
-                bottom: BorderSide(color: AppColors.accent, width: 2),
-              ),
-            ),
-            child: const Row(
-              children: [
-                Icon(Icons.folder, color: Colors.white, size: 16),
-                SizedBox(width: 8),
-                Text(
-                  'Meus Documentos',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
           // ── CONTEÚDO SCROLLÁVEL ──
           Expanded(
             child: ListView(
@@ -131,9 +107,11 @@ class _DocumentosTabState extends State<DocumentosTab> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(p['pasta'] ?? '',
-                                    style: const TextStyle(
+                                    style: TextStyle(
                                         fontWeight: FontWeight.w600,
-                                        color: Color(0xFF004D66))),
+                                        color: _pastaSelecionada == p['pasta']
+                                            ? Colors.white
+                                            : const Color(0xFF004D66))),
                               ),
                               Text(
                                 '${p['total_arquivos']} arq.',
@@ -172,17 +150,20 @@ class _DocumentosTabState extends State<DocumentosTab> {
 
                 // Arquivos
                 if (_arquivos.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(40),
-                    child: Column(
-                      children: [
-                        Icon(Icons.folder_open_outlined,
-                            color: Colors.white24, size: 40),
-                        SizedBox(height: 10),
-                        Text('Nenhum arquivo encontrado',
-                            style:
-                                TextStyle(color: Colors.white38, fontSize: 13)),
-                      ],
+                  const SizedBox(
+                    height: 450,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.folder_open_outlined,
+                              color: Colors.white24, size: 56),
+                          SizedBox(height: 16),
+                          Text('Selecione uma pasta',
+                              style: TextStyle(
+                                  color: Colors.white38, fontSize: 14)),
+                        ],
+                      ),
                     ),
                   )
                 else

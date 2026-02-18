@@ -2,11 +2,151 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/usina.dart';
 import '../services/api_service.dart';
-import '../constants/app_colors.dart';
 
-// ═══════════════════════════════════════════════
-// ABA USINAS — replica /investidor/usinas
-// ═══════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// Paleta
+// ─────────────────────────────────────────────────────────────────────────────
+const _bgDark = Color(0xFF001f2e);
+const _bgMid = Color(0xFF003a4d);
+const _bgCard = Color(0xFF004D66);
+const _accent = Color(0xFFEAC248);
+const _barProd = Color(0xFFEAC248); // Produção  → dourado
+const _barProg = Color(0xFF004D66); // Prognóstico → azul-escuro
+const _lineDesemp = Color(0xFFef4444); // Desempenho → vermelho
+
+// reservedSize compartilhados entre BarChart e LineChart overlay
+// CRÍTICO: devem ser idênticos nos dois widgets para a área de plot alinhar
+const double _leftR = 40.0;
+const double _rightR = 38.0;
+const double _bottomR = 20.0;
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+// CustomPainter para desenhar a linha de desempenho sobre o BarChart
+class DesempenhoLinePainter extends CustomPainter {
+  final List<double> desempData; // valores de desempenho em %
+  final double maxY; // escala Y máxima do gráfico
+  final double maxDesemp; // 120.0
+  final int nGroups; // número de grupos/barras
+  final Color lineColor;
+  final double leftReserved;
+  final double rightReserved;
+  final double bottomReserved;
+  final BarChartAlignment alignment;
+  final double groupsSpace;
+
+  DesempenhoLinePainter({
+    required this.desempData,
+    required this.maxY,
+    required this.maxDesemp,
+    required this.nGroups,
+    required this.lineColor,
+    required this.leftReserved,
+    required this.rightReserved,
+    required this.bottomReserved,
+    required this.alignment,
+    required this.groupsSpace,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (desempData.isEmpty) return;
+
+    final plotWidth = size.width - leftReserved - rightReserved;
+    final plotHeight = size.height - bottomReserved;
+    final plotLeft = leftReserved;
+    final plotTop = 0.0;
+
+    // Calcular a largura de cada grupo e espaçamento
+    final groupWidth = plotWidth / nGroups;
+
+    // Converter dados de desempenho para pontos no canvas
+    final points = <Offset>[];
+    for (int i = 0; i < desempData.length; i++) {
+      final desemp = desempData[i];
+
+      // Posição X: centro de cada grupo
+      final xInPlot = (i + 0.5) * groupWidth;
+      final xPixel = plotLeft + xInPlot;
+
+      // Posição Y: escalar de 0-120% para plotHeight
+      final yValue = (desemp / maxDesemp) * maxY;
+      final yInPlot = plotHeight - (yValue / maxY) * plotHeight;
+      const yOffsetPx = 6.0;
+      final shiftedY = plotTop + yInPlot + yOffsetPx;
+      final yPixel = shiftedY
+          .clamp(
+            plotTop + 3.5,
+            plotTop + plotHeight - 3.5,
+          )
+          .toDouble();
+
+      points.add(Offset(xPixel, yPixel));
+    }
+
+    // Desenhar a linha conectando os pontos com suavização
+    final paint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 2.5
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..style = PaintingStyle.stroke;
+
+    // Desenhar linha com curvatura suave
+    if (points.length >= 2) {
+      final path = _createSmoothPath(points);
+      canvas.drawPath(path, paint);
+    }
+
+    // Desenhar pontos nos dados
+    final dotPaint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 2
+      ..style = PaintingStyle.stroke;
+
+    final fillPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+
+    for (final point in points) {
+      canvas.drawCircle(point, 3.5, fillPaint);
+      canvas.drawCircle(point, 3.5, dotPaint);
+    }
+  }
+
+  // Criar um path suave usando interpolação cúbica de Hermite
+  Path _createSmoothPath(List<Offset> points) {
+    final path = Path();
+    if (points.isEmpty) return path;
+
+    path.moveTo(points[0].dx, points[0].dy);
+
+    if (points.length == 1) {
+      return path;
+    }
+
+    // Usar quadratic Bezier para suavidade
+    for (int i = 0; i < points.length - 1; i++) {
+      final p0 = points[i];
+      final p1 = points[i + 1];
+      final controlX = (p0.dx + p1.dx) / 2;
+      final controlY = (p0.dy + p1.dy) / 2;
+
+      path.quadraticBezierTo(controlX, controlY, p1.dx, p1.dy);
+    }
+
+    return path;
+  }
+
+  @override
+  bool shouldRepaint(DesempenhoLinePainter oldDelegate) {
+    return oldDelegate.desempData != desempData ||
+        oldDelegate.maxY != maxY ||
+        oldDelegate.nGroups != nGroups;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class UsinasTab extends StatefulWidget {
   const UsinasTab({super.key});
@@ -16,15 +156,12 @@ class UsinasTab extends StatefulWidget {
 }
 
 class UsinasTabState extends State<UsinasTab> {
-  // ── Estado ──
+  // ── Estado ──────────────────────────────────────────────────────────────────
   List<Gerador> _geradores = [];
   String? _geradorSelecionado;
   List<Usina> _usinas = [];
 
-  // Período atual: dia | periodo | mes | ano
   String _periodo = 'dia';
-
-  // Seletores de data
   DateTime _diaSelecionado = DateTime.now();
   DateTime _periodoInicio = DateTime.now().subtract(const Duration(days: 7));
   DateTime _periodoFim = DateTime.now();
@@ -32,14 +169,14 @@ class UsinasTabState extends State<UsinasTab> {
       '${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}';
   int _anoSelecionado = DateTime.now().year;
 
-  // Dados
   Map<String, dynamic>? _statsData;
   Map<String, dynamic>? _chartData;
 
-  // Loading
   bool _loadingGeradores = true;
   bool _loadingDados = false;
+  int? _touchedBarGroupIndex;
 
+  // ── INIT ────────────────────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
@@ -54,26 +191,27 @@ class UsinasTabState extends State<UsinasTab> {
     }
   }
 
-  // ── CARREGAR GERADORES ──
+  // ── CARREGAMENTO DE DADOS ───────────────────────────────────────────────────
+
   Future<void> _loadGeradores() async {
     setState(() => _loadingGeradores = true);
     try {
       final geradores = await ApiService.getGeradores();
+      if (!mounted) return;
       setState(() {
         _geradores = geradores;
         _loadingGeradores = false;
       });
-      // Auto-selecionar se só 1
       if (geradores.length == 1) {
         _selecionarGerador(geradores.first.codigoGerador);
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() => _loadingGeradores = false);
       _showError('Erro ao carregar geradores: $e');
     }
   }
 
-  // ── SELECIONAR GERADOR ──
   Future<void> _selecionarGerador(String codigo) async {
     setState(() {
       _geradorSelecionado = codigo;
@@ -84,10 +222,10 @@ class UsinasTabState extends State<UsinasTab> {
     await _loadDesempenho();
   }
 
-  // ── CARREGAR USINAS DO GERADOR ──
   Future<void> _loadUsinas() async {
     try {
       final all = await ApiService.getUsinasInvestidor();
+      if (!mounted) return;
       setState(() {
         _usinas =
             all.where((u) => u.codigoGerador == _geradorSelecionado).toList();
@@ -95,44 +233,53 @@ class UsinasTabState extends State<UsinasTab> {
     } catch (_) {}
   }
 
-  // ── CARREGAR DESEMPENHO (agrega múltiplas usinas) ──
   Future<void> _loadDesempenho() async {
     if (_geradorSelecionado == null || _usinas.isEmpty) return;
-    setState(() => _loadingDados = true);
+    setState(() {
+      _loadingDados = true;
+      _statsData = null;
+      _chartData = null;
+      _touchedBarGroupIndex = null;
+    });
 
     try {
-      // Buscar desempenho de cada usina em paralelo
-      final futures = _usinas.map((u) => ApiService.getDesempenhoInvestidor(
-            u.idPlanta,
-            periodo: _periodo,
-            data: _periodo == 'dia'
-                ? '${_diaSelecionado.year}-${_diaSelecionado.month.toString().padLeft(2, '0')}-${_diaSelecionado.day.toString().padLeft(2, '0')}'
-                : null,
-            mes: _periodo == 'mes' ? _mesSelecionado : null,
-            ano: _periodo == 'ano' ? '$_anoSelecionado' : null,
-            dataInicio: _periodo == 'periodo'
-                ? '${_periodoInicio.year}-${_periodoInicio.month.toString().padLeft(2, '0')}-${_periodoInicio.day.toString().padLeft(2, '0')}'
-                : null,
-            dataFim: _periodo == 'periodo'
-                ? '${_periodoFim.year}-${_periodoFim.month.toString().padLeft(2, '0')}-${_periodoFim.day.toString().padLeft(2, '0')}'
-                : null,
-          ));
+      final dataStr = _fmt(_diaSelecionado);
+      final inicioStr = _fmt(_periodoInicio);
+      final fimStr = _fmt(_periodoFim);
+
+      final futures = _usinas.map(
+        (u) => ApiService.getDesempenhoInvestidor(
+          u.idPlanta,
+          periodo: _periodo,
+          data: _periodo == 'dia' ? dataStr : null,
+          mes: _periodo == 'mes' ? _mesSelecionado : null,
+          ano: _periodo == 'ano' ? '$_anoSelecionado' : null,
+          dataInicio: _periodo == 'periodo' ? inicioStr : null,
+          dataFim: _periodo == 'periodo' ? fimStr : null,
+        ),
+      );
 
       final results = await Future.wait(futures);
       final agregado = _agregarDados(results);
 
+      if (!mounted) return;
       setState(() {
         _statsData = agregado['stats'];
         _chartData = agregado['chart'];
         _loadingDados = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _loadingDados = false);
       _showError('Erro ao carregar dados: $e');
     }
   }
 
-  // ── AGREGAR DADOS DE MÚLTIPLAS USINAS ──
+  // ── AGREGAÇÃO ───────────────────────────────────────────────────────────────
+  // Lógica espelhada do web (usinas.html: agregarDados + calcularDesempenho)
+  // Prognóstico e desempenho: mostrados para todos os períodos EXCETO 'dia'
+  // (igual à condição do web: currentPeriod !== 'dia')
+
   Map<String, dynamic> _agregarDados(List<Map<String, dynamic>> results) {
     double producaoTotal = 0;
     double potenciaMaxima = 0;
@@ -153,39 +300,45 @@ class UsinasTabState extends State<UsinasTab> {
       horasOperacao += _toDouble(stats['horas_operacao']);
 
       final chart = r['chart'] as Map<String, dynamic>;
+
       if (i == 0) {
         labels = List<String>.from(chart['labels'] ?? []);
         final raw = chart['producao'] ?? chart['potencia'] ?? [];
-        producao = List<double>.from((raw as List).map((v) => _toDouble(v)));
+        producao = List<double>.from((raw as List).map(_toDouble));
         if (chart['prognostico'] != null) {
           prognostico = List<double>.from(
-              (chart['prognostico'] as List).map((v) => _toDouble(v)));
+            (chart['prognostico'] as List).map(_toDouble),
+          );
         }
       } else {
         final raw = chart['producao'] ?? chart['potencia'] ?? [];
-        final extra = List<double>.from((raw as List).map((v) => _toDouble(v)));
+        final extra = List<double>.from((raw as List).map(_toDouble));
         for (int j = 0; j < producao.length && j < extra.length; j++) {
           producao[j] += extra[j];
         }
         if (chart['prognostico'] != null && prognostico.isNotEmpty) {
-          final extraProg = List<double>.from(
-              (chart['prognostico'] as List).map((v) => _toDouble(v)));
-          for (int j = 0; j < prognostico.length && j < extraProg.length; j++) {
-            prognostico[j] += extraProg[j];
+          final ep = List<double>.from(
+            (chart['prognostico'] as List).map(_toDouble),
+          );
+          for (int j = 0; j < prognostico.length && j < ep.length; j++) {
+            prognostico[j] += ep[j];
           }
         }
       }
     }
 
-    // Calcular média igual ao sistema web
+    // Média
     double media = 0;
     if (_periodo == 'dia') {
       media = producaoTotal / 24;
     } else if (_periodo == 'mes') {
-      final parts = _mesSelecionado.split('-');
-      final diasNoMes =
-          DateTime(int.parse(parts[0]), int.parse(parts[1]) + 1, 0).day;
-      media = producaoTotal / diasNoMes;
+      final p = _mesSelecionado.split('-');
+      final dias = DateTime(
+        int.parse(p[0]),
+        int.parse(p[1]) + 1,
+        0,
+      ).day;
+      media = producaoTotal / dias;
     } else if (_periodo == 'ano') {
       media = producaoTotal / 12;
     } else if (_periodo == 'periodo') {
@@ -193,14 +346,13 @@ class UsinasTabState extends State<UsinasTab> {
       media = producaoTotal / diff;
     }
 
-    // Calcular desempenho (%)
-    List<double?> desempenho = [];
-    if (prognostico.isNotEmpty && _periodo != 'dia') {
+    // Desempenho: idêntico ao web — se há prognóstico e período != 'dia'
+    final temProg = prognostico.isNotEmpty && _periodo != 'dia';
+    final desempenho = <double?>[];
+    if (temProg) {
       for (int i = 0; i < producao.length; i++) {
-        final prog = i < prognostico.length ? prognostico[i] : 0;
-        final prod = producao[i];
-        final percent = prog > 0 ? (prod / prog) * 100 : null;
-        desempenho.add(percent);
+        final prog = i < prognostico.length ? prognostico[i] : 0.0;
+        desempenho.add(prog > 0 ? (producao[i] / prog) * 100 : null);
       }
     }
 
@@ -214,11 +366,13 @@ class UsinasTabState extends State<UsinasTab> {
       'chart': {
         'labels': labels,
         'producao': producao,
-        'prognostico': prognostico.isNotEmpty ? prognostico : null,
+        'prognostico': temProg ? prognostico : null,
         'desempenho': desempenho.isNotEmpty ? desempenho : null,
-      }
+      },
     };
   }
+
+  // ── UTILS ───────────────────────────────────────────────────────────────────
 
   void _showError(String msg) {
     if (!mounted) return;
@@ -233,229 +387,243 @@ class UsinasTabState extends State<UsinasTab> {
     return 0.0;
   }
 
+  String _fmt(DateTime d) => '${d.year}-'
+      '${d.month.toString().padLeft(2, '0')}-'
+      '${d.day.toString().padLeft(2, '0')}';
+
+  String _fmtDate(DateTime d) => '${d.day.toString().padLeft(2, '0')}/'
+      '${d.month.toString().padLeft(2, '0')}/'
+      '${d.year}';
+
   String _fmtNum(double v) {
-    if (v >= 1000) {
-      return v.toStringAsFixed(1).replaceAll('.', ',').replaceAllMapped(
-            RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-            (m) => '${m[1]}.',
-          );
+    final abs = v.abs();
+    final sign = v < 0 ? '-' : '';
+    final str = abs.toStringAsFixed(1);
+    final p = str.split('.');
+    final buf = StringBuffer();
+    for (int i = 0; i < p[0].length; i++) {
+      if (i > 0 && (p[0].length - i) % 3 == 0) buf.write('.');
+      buf.write(p[0][i]);
     }
-    return v.toStringAsFixed(1).replaceAll('.', ',');
+    return '$sign${buf.toString()},${p[1]}';
   }
 
-  // ═══════════════════════════════════════════════
+  String _shortNum(double v) {
+    if (v >= 1000000) {
+      return '${(v / 1000000).toStringAsFixed(1)}M';
+    }
+    if (v >= 1000) return '${(v / 1000).toStringAsFixed(0)}k';
+    return v.toStringAsFixed(0);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // BUILD
-  // ═══════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════════════════
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: const Color(0xFF001f2e),
-      child: Column(
-        children: [
-          // ── TOPO FIXO: GERADORES ──
-          _buildTopSection(),
+    return OrientationBuilder(
+      builder: (context, orientation) {
+        final isLandscape = orientation == Orientation.landscape;
+        return Container(
+          color: _bgDark,
+          child: _buildContent(isLandscape),
+        );
+      },
+    );
+  }
 
-          // ── CONTEÚDO SCROLLÁVEL ──
-          Expanded(
-            child: _geradorSelecionado == null
-                ? _buildEmptyState()
-                : ListView(
-                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 16),
-                    children: [
-                      // Card gráfico
-                      _buildChartCard(),
-                    ],
+  Widget _buildContent(bool isLandscape) {
+    return ListView(
+      padding: EdgeInsets.fromLTRB(14, 10, 14, isLandscape ? 8 : 16),
+      children: [
+        _buildDropdownGerador(),
+        const SizedBox(height: 12),
+        if (_geradorSelecionado == null)
+          const SizedBox(
+            height: 450,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.area_chart_outlined,
+                      color: Colors.white24, size: 56),
+                  SizedBox(height: 16),
+                  Text(
+                    'Selecione uma usina para ver as informações',
+                    style: TextStyle(color: Colors.white38, fontSize: 14),
+                    textAlign: TextAlign.center,
                   ),
+                ],
+              ),
+            ),
+          )
+        else
+          _buildChartCard(isLandscape),
+      ],
+    );
+  }
+
+  // ── DROPDOWN GERADOR ────────────────────────────────────────────────────────
+
+  Widget _buildDropdownGerador() {
+    if (_loadingGeradores) {
+      return const SizedBox(
+        height: 46,
+        child: Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(color: _accent, strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: _bgCard,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: _geradorSelecionado != null ? _accent : Colors.transparent,
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
           ),
         ],
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: _geradorSelecionado,
+          isExpanded: true,
+          hint: const Row(
+            children: [
+              Icon(Icons.solar_power_rounded, color: _accent, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Selecione uma Usina',
+                style: TextStyle(
+                  color: Color.fromARGB(255, 255, 255, 255),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          icon: const Icon(Icons.expand_more, color: _accent, size: 22),
+          dropdownColor: _bgMid,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+          items: _geradores.map((g) {
+            return DropdownMenuItem<String>(
+              value: g.codigoGerador,
+              child: Row(
+                children: [
+                  const Icon(Icons.solar_power_outlined,
+                      color: _accent, size: 18),
+                  const SizedBox(width: 8),
+                  Text(g.codigoGerador),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: (v) {
+            if (v != null) _selecionarGerador(v);
+          },
+        ),
       ),
     );
   }
 
-  // ── TOPO FIXO ──
-  Widget _buildTopSection() {
+  // ── CARD PRINCIPAL ──────────────────────────────────────────────────────────
+
+  Widget _buildChartCard(bool isLandscape) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF001f2e).withOpacity(0.95),
+        color: _bgMid,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _accent.withOpacity(0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Geradores
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
-            child: _loadingGeradores
-                ? const SizedBox(
-                    height: 50,
-                    child: Center(
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                          color: AppColors.accent,
-                          strokeWidth: 2,
-                        ),
-                      ),
-                    ),
-                  )
-                : Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF004D66),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: _geradorSelecionado != null
-                            ? AppColors.accent
-                            : Colors.transparent,
-                        width: 2,
-                      ),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: _geradorSelecionado,
-                        isExpanded: true,
-                        hint: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.solar_power_rounded,
-                                color: Color(0xFFFFB800), size: 20),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Usinas',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                        icon: const Icon(Icons.expand_more,
-                            color: AppColors.accent, size: 24),
-                        dropdownColor: const Color(0xFF003a4d),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        items: _geradores.map((gerador) {
-                          return DropdownMenuItem<String>(
-                            value: gerador.codigoGerador,
-                            child: Row(
-                              children: [
-                                const Icon(Icons.solar_power_outlined,
-                                    color: AppColors.accent, size: 18),
-                                const SizedBox(width: 8),
-                                Text(gerador.codigoGerador),
-                              ],
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          if (value != null) {
-                            _selecionarGerador(value);
-                          }
-                        },
-                      ),
-                    ),
-                  ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── EMPTY STATE ──
-  Widget _buildEmptyState() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.area_chart_outlined, color: Colors.white24, size: 48),
-          SizedBox(height: 12),
-          Text(
-            'Selecione uma usina para\nvisualizar os dados',
-            style: TextStyle(color: Colors.white38, fontSize: 13),
-            textAlign: TextAlign.center,
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── CARD PRINCIPAL (PERÍODO + STATS + GRÁFICO) ──
-  Widget _buildChartCard() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.accent.withOpacity(0.3)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 12,
-          )
-        ],
-      ),
-      child: Column(
-        children: [
-          // Header do card
+          // Header
           Container(
             padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            decoration: BoxDecoration(
-              color: const Color(0xFF003a4d),
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(8),
-                topRight: Radius.circular(8),
-              ),
+            decoration: const BoxDecoration(
               border: Border(
-                bottom: BorderSide(
-                    color: AppColors.accent.withOpacity(0.3), width: 1),
+                bottom: BorderSide(color: _accent, width: 2),
+              ),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(10),
+                topRight: Radius.circular(10),
               ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.show_chart, color: AppColors.accent, size: 16),
+                const Icon(Icons.show_chart, color: _accent, size: 16),
                 const SizedBox(width: 8),
-                Text(
-                  _geradorSelecionado != null
-                      ? 'Geração - $_geradorSelecionado'
-                      : 'Geração de Energia',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                Expanded(
+                  child: Text(
+                    _geradorSelecionado != null
+                        ? 'Geração — $_geradorSelecionado'
+                        : 'Geração de Energia',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ],
             ),
           ),
 
-          // Botões de período
           _buildPeriodButtons(),
-
-          // Seletores de data
           _buildDateSelectors(),
 
-          // Stats row (4 cards)
           if (_loadingDados)
             const Padding(
-              padding: EdgeInsets.all(24),
+              padding: EdgeInsets.symmetric(vertical: 40),
               child: Center(
-                child: CircularProgressIndicator(color: AppColors.accent),
+                child: CircularProgressIndicator(color: _accent),
               ),
             )
           else if (_statsData != null) ...[
             _buildStatsRow(),
-            _buildGrafico(),
+            _buildGrafico(isLandscape),
+            const SizedBox(height: 6),
           ] else
-            Container(
-              height: 200,
-              alignment: Alignment.center,
-              child: const Text(
-                'Carregando...',
-                style: TextStyle(color: Color(0xFF6b7280)),
+            const SizedBox(
+              height: 180,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.area_chart_outlined,
+                        color: Colors.white24, size: 36),
+                    SizedBox(height: 8),
+                    Text(
+                      'Sem dados para o período',
+                      style: TextStyle(color: Colors.white38, fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
             ),
         ],
@@ -463,9 +631,10 @@ class UsinasTabState extends State<UsinasTab> {
     );
   }
 
-  // ── BOTÕES DE PERÍODO ──
+  // ── BOTÕES DE PERÍODO ───────────────────────────────────────────────────────
+
   Widget _buildPeriodButtons() {
-    final periodos = [
+    const periodos = [
       {'key': 'dia', 'label': 'Hoje'},
       {'key': 'periodo', 'label': 'Período'},
       {'key': 'mes', 'label': 'Mês'},
@@ -473,12 +642,10 @@ class UsinasTabState extends State<UsinasTab> {
     ];
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
       decoration: BoxDecoration(
-        color: const Color(0xFF003a4d),
         border: Border(
-          bottom:
-              BorderSide(color: AppColors.accent.withOpacity(0.3), width: 1),
+          bottom: BorderSide(color: _accent.withOpacity(0.2)),
         ),
       ),
       child: Row(
@@ -487,6 +654,7 @@ class UsinasTabState extends State<UsinasTab> {
           return Expanded(
             child: GestureDetector(
               onTap: () {
+                if (_periodo == p['key']!) return;
                 setState(() {
                   _periodo = p['key']!;
                   _statsData = null;
@@ -499,20 +667,16 @@ class UsinasTabState extends State<UsinasTab> {
                 margin: const EdgeInsets.symmetric(horizontal: 3),
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
-                  color: active ? AppColors.accent : const Color(0xFF004D66),
+                  color: active ? _accent : const Color(0xFF004D66),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: active ? AppColors.accent : Colors.transparent,
-                    width: 2,
-                  ),
                 ),
                 child: Text(
                   p['label']!,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: active ? const Color(0xFF004D66) : Colors.white70,
+                    fontWeight: FontWeight.w600,
+                    color: active ? const Color(0xFF003E52) : Colors.white70,
                   ),
                 ),
               ),
@@ -523,65 +687,61 @@ class UsinasTabState extends State<UsinasTab> {
     );
   }
 
-  // ── SELETORES DE DATA ──
+  // ── SELETORES DE DATA ───────────────────────────────────────────────────────
+
   Widget _buildDateSelectors() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
-      decoration: const BoxDecoration(
-        color: Color(0xFF003a4d),
-      ),
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
       child: Row(
         children: [
           if (_periodo == 'dia')
             Expanded(
-                child: _datePicker(
-              label: _fmtDate(_diaSelecionado),
-              onTap: () => _pickDate(
-                initial: _diaSelecionado,
-                onPicked: (d) {
-                  setState(() => _diaSelecionado = d);
-                  _loadDesempenho();
-                },
+              child: _datePicker(
+                label: _fmtDate(_diaSelecionado),
+                onTap: () => _pickDate(
+                  initial: _diaSelecionado,
+                  onPicked: (d) {
+                    setState(() => _diaSelecionado = d);
+                    _loadDesempenho();
+                  },
+                ),
               ),
-            )),
+            ),
           if (_periodo == 'periodo') ...[
             Expanded(
-                child: _datePicker(
-              label: _fmtDate(_periodoInicio),
-              onTap: () => _pickDate(
-                initial: _periodoInicio,
-                onPicked: (d) {
-                  setState(() => _periodoInicio = d);
-                  _loadDesempenho();
-                },
+              child: _datePicker(
+                label: _fmtDate(_periodoInicio),
+                onTap: () => _pickDate(
+                  initial: _periodoInicio,
+                  onPicked: (d) {
+                    setState(() => _periodoInicio = d);
+                    _loadDesempenho();
+                  },
+                ),
               ),
-            )),
+            ),
             const SizedBox(width: 8),
             Expanded(
-                child: _datePicker(
-              label: _fmtDate(_periodoFim),
-              onTap: () => _pickDate(
-                initial: _periodoFim,
-                onPicked: (d) {
-                  setState(() => _periodoFim = d);
-                  _loadDesempenho();
-                },
+              child: _datePicker(
+                label: _fmtDate(_periodoFim),
+                onTap: () => _pickDate(
+                  initial: _periodoFim,
+                  onPicked: (d) {
+                    setState(() => _periodoFim = d);
+                    _loadDesempenho();
+                  },
+                ),
               ),
-            )),
+            ),
           ],
           if (_periodo == 'mes')
             Expanded(
-                child: _datePicker(
-              label: _mesSelecionado,
-              onTap: () => _pickMonth(),
-            )),
-          if (_periodo == 'ano')
-            Expanded(
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: _anoSelector(),
+              child: _datePicker(
+                label: _mesSelecionado,
+                onTap: _pickMonth,
               ),
             ),
+          if (_periodo == 'ano') Expanded(child: _anoSelector()),
         ],
       ),
     );
@@ -594,16 +754,15 @@ class UsinasTabState extends State<UsinasTab> {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
         decoration: BoxDecoration(
-          color: const Color(0xFF004D66),
+          color: _bgCard,
           borderRadius: BorderRadius.circular(6),
-          border:
-              Border.all(color: AppColors.accent.withOpacity(0.3), width: 1),
+          border: Border.all(color: _accent.withOpacity(0.3)),
         ),
         child: Row(
           children: [
-            const Icon(Icons.calendar_today, size: 12, color: AppColors.accent),
+            const Icon(Icons.calendar_today, size: 12, color: _accent),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
@@ -622,42 +781,42 @@ class UsinasTabState extends State<UsinasTab> {
   }
 
   Widget _anoSelector() {
-    final years = [2026, 2025, 2024];
+    const years = [2026, 2025, 2024, 2023];
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFF004D66),
+        color: _bgCard,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: AppColors.accent.withOpacity(0.3), width: 1),
+        border: Border.all(color: _accent.withOpacity(0.3)),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int>(
           value: _anoSelecionado,
           isExpanded: true,
           isDense: true,
-          dropdownColor: const Color(0xFF003a4d),
+          dropdownColor: _bgMid,
           style: const TextStyle(
             color: Colors.white,
             fontSize: 12,
             fontWeight: FontWeight.w500,
           ),
-          iconEnabledColor: AppColors.accent,
+          iconEnabledColor: _accent,
           iconSize: 18,
+          selectedItemBuilder: (context) => years
+              .map(
+                (a) => Row(
+                  children: [
+                    const Icon(Icons.calendar_today, size: 12, color: _accent),
+                    const SizedBox(width: 6),
+                    Text('$a'),
+                  ],
+                ),
+              )
+              .toList(),
           items: years
               .map((a) => DropdownMenuItem(
                     value: a,
-                    child: Center(child: Text('$a')),
-                  ))
-              .toList(),
-          selectedItemBuilder: (context) => years
-              .map((a) => Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.calendar_today,
-                          size: 12, color: AppColors.accent),
-                      const SizedBox(width: 6),
-                      Text('$a'),
-                    ],
+                    child: Text('$a'),
                   ))
               .toList(),
           onChanged: (a) {
@@ -679,6 +838,7 @@ class UsinasTabState extends State<UsinasTab> {
       initialDate: initial,
       firstDate: DateTime(2020),
       lastDate: DateTime.now(),
+      locale: const Locale('pt', 'BR'),
       builder: (ctx, child) => Theme(
         data: ThemeData.light().copyWith(
           colorScheme: const ColorScheme.light(
@@ -697,142 +857,130 @@ class UsinasTabState extends State<UsinasTab> {
     int year = int.parse(parts[0]);
     int month = int.parse(parts[1]);
 
-    await showDialog(
+    const meses = [
+      'Jan',
+      'Fev',
+      'Mar',
+      'Abr',
+      'Mai',
+      'Jun',
+      'Jul',
+      'Ago',
+      'Set',
+      'Out',
+      'Nov',
+      'Dez',
+    ];
+
+    await showDialog<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF003a4d),
-        title: const Text('Selecionar Mês',
-            style: TextStyle(color: Colors.white, fontSize: 15)),
-        content: SizedBox(
-          width: 280,
-          child: GridView.count(
-            crossAxisCount: 3,
-            shrinkWrap: true,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-            childAspectRatio: 2,
-            children: List.generate(12, (i) {
-              final meses = [
-                'Jan',
-                'Fev',
-                'Mar',
-                'Abr',
-                'Mai',
-                'Jun',
-                'Jul',
-                'Ago',
-                'Set',
-                'Out',
-                'Nov',
-                'Dez'
-              ];
-              final isSelected = (i + 1) == month;
-              return GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _mesSelecionado =
-                        '$year-${(i + 1).toString().padLeft(2, '0')}';
-                  });
-                  _loadDesempenho();
-                  Navigator.pop(ctx);
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    color:
-                        isSelected ? AppColors.accent : const Color(0xFF004D66),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    meses[i],
-                    style: TextStyle(
-                      color:
-                          isSelected ? const Color(0xFF003E52) : Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
-        actions: [
-          Row(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          backgroundColor: _bgMid,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          title: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               IconButton(
-                icon: const Icon(Icons.arrow_back,
-                    color: Colors.white70, size: 18),
-                onPressed: () {
-                  setState(() {
-                    year--;
-                    _mesSelecionado =
-                        '$year-${month.toString().padLeft(2, '0')}';
-                  });
-                  Navigator.pop(ctx);
-                  _pickMonth();
-                },
+                icon: const Icon(Icons.chevron_left,
+                    color: Colors.white70, size: 22),
+                onPressed: () => setLocal(() => year--),
               ),
-              Text('$year',
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w600)),
+              Text(
+                '$year',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               IconButton(
-                icon: const Icon(Icons.arrow_forward,
-                    color: Colors.white70, size: 18),
+                icon: const Icon(Icons.chevron_right,
+                    color: Colors.white70, size: 22),
                 onPressed: () {
                   if (year < DateTime.now().year) {
-                    setState(() {
-                      year++;
-                      _mesSelecionado =
-                          '$year-${month.toString().padLeft(2, '0')}';
-                    });
-                    Navigator.pop(ctx);
-                    _pickMonth();
+                    setLocal(() => year++);
                   }
                 },
               ),
             ],
           ),
-        ],
+          content: SizedBox(
+            width: 280,
+            child: GridView.count(
+              crossAxisCount: 3,
+              shrinkWrap: true,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: 2.2,
+              children: List.generate(12, (i) {
+                final sel = (i + 1) == month;
+                return GestureDetector(
+                  onTap: () {
+                    final novo = '$year-${(i + 1).toString().padLeft(2, '0')}';
+                    setState(() => _mesSelecionado = novo);
+                    _loadDesempenho();
+                    Navigator.pop(ctx);
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 120),
+                    decoration: BoxDecoration(
+                      color: sel ? _accent : _bgCard,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Center(
+                      child: Text(
+                        meses[i],
+                        style: TextStyle(
+                          color: sel ? const Color(0xFF003E52) : Colors.white70,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
       ),
     );
   }
 
-  String _fmtDate(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  // ── STATS ROW ───────────────────────────────────────────────────────────────
 
-  // ── STATS ROW (4 métricas) ──
   Widget _buildStatsRow() {
     final s = _statsData!;
     final items = [
       {
-        'label': 'PRODUÇÃO TOTAL',
+        'label': 'PRODUÇÃO',
         'value': _fmtNum(_toDouble(s['producao_total'])),
-        'unit': 'kWh'
+        'unit': 'kWh',
       },
       {
-        'label': 'POTÊNCIA MÁX',
+        'label': 'POT. MÁX',
         'value': _fmtNum(_toDouble(s['potencia_maxima'])),
-        'unit': 'kW'
+        'unit': 'kW',
       },
       {
         'label': 'HORAS OP.',
         'value': _fmtNum(_toDouble(s['horas_operacao'])),
-        'unit': 'horas'
+        'unit': 'h',
       },
       {
         'label': 'MÉDIA',
         'value': _fmtNum(_toDouble(s['producao_media'])),
-        'unit': 'kWh'
+        'unit': 'kWh',
       },
     ];
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         border: Border(
-          top: BorderSide(color: Color(0xFFe5e7eb)),
-          bottom: BorderSide(color: Color(0xFFe5e7eb)),
+          top: BorderSide(color: _accent.withOpacity(0.25)),
+          bottom: BorderSide(color: _accent.withOpacity(0.25)),
         ),
       ),
       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -844,28 +992,26 @@ class UsinasTabState extends State<UsinasTab> {
                 Text(
                   item['label']!,
                   style: const TextStyle(
-                    fontSize: 9,
-                    color: Color(0xFF6b7280),
-                    letterSpacing: 0.4,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 8.5,
+                    color: Color(0xFFb0c4ce),
+                    letterSpacing: 0.5,
+                    fontWeight: FontWeight.w600,
                   ),
                   textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 5),
                 Text(
                   item['value']!,
                   style: const TextStyle(
-                    fontSize: 18,
+                    fontSize: 14,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF004D66),
+                    color: Colors.white,
                   ),
+                  textAlign: TextAlign.center,
                 ),
                 Text(
                   item['unit']!,
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Color(0xFF9ca3af),
-                  ),
+                  style: const TextStyle(fontSize: 9, color: Color(0xFFb0c4ce)),
                 ),
               ],
             ),
@@ -875,215 +1021,423 @@ class UsinasTabState extends State<UsinasTab> {
     );
   }
 
-  // ── GRÁFICO ──
-  Widget _buildGrafico() {
+  // ── GRÁFICO ─────────────────────────────────────────────────────────────────
+
+  Widget _buildGrafico(bool isLandscape) {
     final chart = _chartData;
     if (chart == null) return const SizedBox.shrink();
 
     final labels = chart['labels'] as List<String>;
     final producao = chart['producao'] as List<double>;
     final prognostico = chart['prognostico'] as List<double>?;
+    final desempenho = chart['desempenho'] as List<double?>?;
 
     final isDia = _periodo == 'dia';
+    final hasPrognostico = prognostico != null && prognostico.isNotEmpty;
+    final hasDesempenho = desempenho != null && desempenho.isNotEmpty;
+    final chartH = isLandscape ? 200.0 : 270.0;
 
     return Padding(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(10, 12, 10, 8),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Legenda (quando há múltiplas séries)
-          if (!isDia && prognostico != null)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  _legendItem(const Color(0xFF004D66), 'Prognóstico'),
-                  const SizedBox(width: 28),
-                  _legendItem(AppColors.accent, 'Produção'),
-                ],
-              ),
-            ),
-
+          if (!isDia) ...[
+            _buildLegenda(hasPrognostico, hasDesempenho),
+            const SizedBox(height: 10),
+          ],
           SizedBox(
-            height: 280,
+            height: chartH,
             child: isDia
                 ? _buildLineChart(labels, producao)
-                : _buildBarChart(labels, producao, prognostico),
+                : _buildBarChart(
+                    labels,
+                    producao,
+                    prognostico,
+                    desempenho,
+                    isLandscape,
+                  ),
           ),
         ],
       ),
     );
   }
 
-  // ── GRÁFICO DE LINHA (período = dia) ──
+  // ── LEGENDA (Wrap — nunca quebra feio) ──────────────────────────────────────
+
+  Widget _buildLegenda(bool hasPrognostico, bool hasDesempenho) {
+    return Wrap(
+      spacing: 14,
+      runSpacing: 6,
+      children: [
+        if (hasPrognostico) _legendItem(_barProg, 'Prognóstico'),
+        _legendItem(_barProd, 'Produção'),
+        if (hasDesempenho) _legendItem(_lineDesemp, 'Desempenho %'),
+      ],
+    );
+  }
+
+  Widget _legendItem(Color color, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 10, color: Color(0xFFb0c4ce)),
+        ),
+      ],
+    );
+  }
+
+  // ── LINE CHART (dia) ────────────────────────────────────────────────────────
+
   Widget _buildLineChart(List<String> labels, List<double> producao) {
     double maxY =
-        producao.isEmpty ? 10 : producao.reduce((a, b) => a > b ? a : b) * 1.2;
+        producao.isEmpty ? 10 : producao.reduce((a, b) => a > b ? a : b) * 1.25;
+    if (maxY == 0) maxY = 10;
 
-    // Mostrar rótulos a cada 2 horas no eixo X
-    const step = 2;
-
-    return LineChart(
-      LineChartData(
-        minY: 0,
-        maxY: maxY,
-        lineTouchData: LineTouchData(
-          touchTooltipData: LineTouchTooltipData(
-            tooltipBgColor: const Color(0xFF003a4d),
-            getTooltipItems: (spots) => spots
-                .map((s) => LineTooltipItem(
-                      '${labels[s.x.toInt()]}\n${_fmtNum(s.y)} kW',
-                      const TextStyle(color: Colors.white, fontSize: 11),
-                    ))
-                .toList(),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      padding: const EdgeInsets.fromLTRB(4, 10, 8, 4),
+      child: LineChart(
+        LineChartData(
+          minY: 0,
+          maxY: maxY,
+          clipData: FlClipData.all(),
+          lineTouchData: LineTouchData(
+            handleBuiltInTouches: true,
+            touchTooltipData: LineTouchTooltipData(
+              tooltipBgColor: _bgMid,
+              tooltipRoundedRadius: 6,
+              fitInsideHorizontally: true,
+              fitInsideVertically: true,
+              getTooltipItems: (spots) => spots
+                  .map(
+                    (s) => LineTooltipItem(
+                      '${labels[s.x.toInt()]}\n'
+                      '${_fmtNum(s.y)} kW',
+                      const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        height: 1.5,
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
           ),
-        ),
-        gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          getDrawingHorizontalLine: (_) => const FlLine(
-            color: Color(0xFFe5e7eb),
-            strokeWidth: 1,
+          gridData: FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            getDrawingHorizontalLine: (_) => const FlLine(
+              color: Color(0xFFe5e7eb),
+              strokeWidth: 1,
+            ),
           ),
-        ),
-        borderData: FlBorderData(show: false),
-        titlesData: FlTitlesData(
-          bottomTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              getTitlesWidget: (v, m) {
-                final i = v.toInt();
-                if (i < 0 || i >= labels.length || i % step != 0) {
-                  return const Text('');
-                }
-                return Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(labels[i],
+          borderData: FlBorderData(show: false),
+          titlesData: FlTitlesData(
+            bottomTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                getTitlesWidget: (v, m) {
+                  final i = v.toInt();
+                  if (i < 0 || i >= labels.length || i % 2 != 0) {
+                    return const Text('');
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      labels[i],
                       style: const TextStyle(
-                          fontSize: 9, color: Color(0xFF374151))),
-                );
-              },
-            ),
-          ),
-          leftTitles: AxisTitles(
-            sideTitles: SideTitles(
-              showTitles: true,
-              reservedSize: 40,
-              getTitlesWidget: (v, m) => Text(
-                _fmtNum(v),
-                style: const TextStyle(fontSize: 9, color: Color(0xFF6b7280)),
+                        fontSize: 9,
+                        color: Color(0xFF374151),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
+            leftTitles: AxisTitles(
+              sideTitles: SideTitles(
+                showTitles: true,
+                reservedSize: 38,
+                getTitlesWidget: (v, m) => Text(
+                  _shortNum(v),
+                  style: const TextStyle(
+                    fontSize: 9,
+                    color: Color(0xFF6b7280),
+                  ),
+                ),
+              ),
+            ),
+            topTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
+            rightTitles: const AxisTitles(
+              sideTitles: SideTitles(showTitles: false),
+            ),
           ),
-          topTitles:
-              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-          rightTitles:
-              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          lineBarsData: [
+            LineChartBarData(
+              spots: producao
+                  .asMap()
+                  .entries
+                  .map((e) => FlSpot(e.key.toDouble(), e.value))
+                  .toList(),
+              isCurved: true,
+              curveSmoothness: 0.4,
+              color: _bgCard,
+              barWidth: 2.5,
+              dotData: FlDotData(
+                show: true,
+                getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
+                  radius: 3,
+                  color: _bgCard,
+                  strokeWidth: 0,
+                ),
+              ),
+              belowBarData: BarAreaData(
+                show: true,
+                color: _accent.withOpacity(0.30),
+              ),
+            ),
+          ],
         ),
-        lineBarsData: [
-          LineChartBarData(
-            spots: producao
-                .asMap()
-                .entries
-                .map((e) => FlSpot(e.key.toDouble(), e.value))
-                .toList(),
-            isCurved: true,
-            curveSmoothness: 0.4,
-            color: const Color(0xFF004D66),
-            barWidth: 2.5,
-            dotData: FlDotData(
-              show: true,
-              getDotPainter: (spot, _, __, ___) => FlDotCirclePainter(
-                radius: 3,
-                color: const Color(0xFF004D66),
-                strokeWidth: 0,
-              ),
-            ),
-            belowBarData: BarAreaData(
-              show: true,
-              color: AppColors.accent.withOpacity(0.35),
-            ),
-          ),
-        ],
       ),
     );
   }
 
-  // ── GRÁFICO DE BARRAS (período = mes/ano/periodo) ──
+  // ── BAR CHART (periodo / mes / ano) com CustomPainter para desempenho ─────
+
   Widget _buildBarChart(
     List<String> labels,
     List<double> producao,
     List<double>? prognostico,
+    List<double?>? desempenho,
+    bool isLandscape,
   ) {
+    const double maxDesemp = 120.0;
+
+    final hasDesempenho = desempenho != null && desempenho.isNotEmpty;
+    final hasPrognostico = prognostico != null && prognostico.isNotEmpty;
+    final isAno = _periodo == 'ano';
+    final isMes = _periodo == 'mes';
+    final nGroups = producao.length;
+
+    if (nGroups == 0) return const SizedBox.shrink();
+
+    // maxY
     double maxY = 0;
     for (final v in producao) {
       if (v > maxY) maxY = v;
     }
-    if (prognostico != null) {
-      for (final v in prognostico) {
+    if (hasPrognostico) {
+      for (int i = 0; i < prognostico.length; i++) {
+        final v = prognostico[i];
         if (v > maxY) maxY = v;
       }
     }
+    if (maxY == 0) maxY = 1;
+    maxY *= 1.25;
 
-    // Arredondar maxY para evitar sobreposição de valores no eixo
-    final isAno = _periodo == 'ano';
-    if (isAno) {
-      maxY = ((maxY / 1000).ceil() * 1000).toDouble() * 1.08;
-    } else {
-      maxY *= 1.2;
+    // Dados de desempenho (valor real em %)
+    final desempData = <double>[];
+    if (hasDesempenho) {
+      for (int i = 0; i < desempenho.length; i++) {
+        final d = desempenho[i];
+        desempData.add(d != null ? d.clamp(0.0, maxDesemp) : 0);
+      }
     }
 
-    // Calcular maxY para porcentagem baseado no maior valor de produção
-    double maxYPercentage = 100;
-    if (prognostico != null && prognostico.isNotEmpty) {
-      // Encontrar o maior valor de produção
-      double maxProducao = 0;
-      int maxProducaoIndex = 0;
-      for (int i = 0; i < producao.length; i++) {
-        if (producao[i] > maxProducao) {
-          maxProducao = producao[i];
-          maxProducaoIndex = i;
-        }
-      }
-      // Calcular a porcentagem do maior valor de produção e aplicar o mesmo fator 1.2
-      if (maxProducaoIndex < prognostico.length &&
-          prognostico[maxProducaoIndex] > 0) {
-        maxYPercentage =
-            (maxProducao / prognostico[maxProducaoIndex]) * 100 * 1.2;
-      }
-      // Arredondar para cima para o próximo número terminando em 5 ou 0
-      maxYPercentage = ((maxYPercentage / 5).ceil() * 5).toDouble();
-      if (maxYPercentage > 120) maxYPercentage = 120;
-    }
+    // Largura das barras
+    final barW = isAno
+        ? (hasPrognostico ? 8.0 : 14.0)
+        : isMes
+            ? (isLandscape
+                ? (hasPrognostico ? 8.0 : 12.0)
+                : (hasPrognostico ? 6.0 : 10.0))
+            : (hasPrognostico ? 6.0 : 10.0);
 
-    final step = (labels.length / 6).ceil().clamp(1, 999);
-    final isMes = _periodo == 'mes';
+    // Passo de labels
     final isPeriodo = _periodo == 'periodo';
-    final splitMesGroups = isMes && prognostico != null;
-    final barWidth = isMes ? 5.0 : (isAno ? 8.0 : 7.0);
-    final singleBarWidth = isMes ? 6.5 : (isAno ? 14.0 : 14.0);
-    final barsSpace = isMes ? 2.0 : (isAno ? 0.5 : 4.0);
-    final groupsSpace = isMes ? 1.0 : (isAno ? 3.0 : 12.0);
-    final hasPrognostico = prognostico != null && prognostico.isNotEmpty;
+    final int step = isMes
+        ? 1
+        : isPeriodo
+            ? (labels.length <= 15
+                ? 1
+                : (labels.length / 8).ceil().clamp(1, 999))
+            : (labels.length / 6).ceil().clamp(1, 999);
 
-    return BarChart(
-      BarChartData(
-        alignment: isMes
-            ? BarChartAlignment.spaceEvenly
+    // No mês, usa scroll apenas no retrato para manter boa ocupação no horizontal
+    final useScrollMes = isMes && !isLandscape && nGroups > 15;
+    final pxPerGroup = hasPrognostico
+        ? (isLandscape ? 24.0 : 26.0)
+        : (isLandscape ? 20.0 : 22.0);
+
+    // Grupos de barras
+    final barsSpace = (isMes && hasPrognostico) ? 0.0 : 2.0;
+
+    final groups = producao.asMap().entries.map((e) {
+      final rods = <BarChartRodData>[];
+      if (hasPrognostico && e.key < prognostico.length) {
+        rods.add(BarChartRodData(
+          toY: prognostico[e.key],
+          color: _barProg,
+          width: barW,
+          borderRadius: const BorderRadius.only(
+            topLeft: Radius.circular(3),
+            topRight: Radius.circular(3),
+          ),
+        ));
+      }
+      rods.add(BarChartRodData(
+        toY: e.value,
+        color: _barProd,
+        width: barW,
+        borderRadius: const BorderRadius.only(
+          topLeft: Radius.circular(3),
+          topRight: Radius.circular(3),
+        ),
+      ));
+      return BarChartGroupData(
+        x: e.key,
+        barRods: rods,
+        barsSpace: barsSpace,
+        showingTooltipIndicators: _touchedBarGroupIndex == e.key
+            ? List<int>.generate(rods.length, (i) => i)
+            : const [],
+      );
+    }).toList();
+
+    // BarChart base
+    // Em horizontal, distribuir os grupos por toda área útil do plot.
+    final groupsSpace = isMes
+        ? (isLandscape
+            ? (hasPrognostico ? 2.0 : 4.0)
+            : (hasPrognostico ? 5.0 : 8.0))
+        : (isLandscape
+            ? (hasPrognostico ? 2.0 : 4.0)
             : (isAno
-                ? BarChartAlignment.center
-                : BarChartAlignment.spaceAround),
+                ? (hasPrognostico ? 6.0 : 10.0)
+                : (hasPrognostico ? 8.0 : 14.0)));
+
+    final baseChart = BarChart(
+      BarChartData(
+        alignment: BarChartAlignment.spaceAround,
         maxY: maxY,
         groupsSpace: groupsSpace,
         barTouchData: BarTouchData(
+          enabled: true,
+          handleBuiltInTouches: false,
+          touchCallback: (event, response) {
+            // Limpa o tooltip ao soltar
+            if (event is FlTapUpEvent ||
+                event is FlPanEndEvent ||
+                event is FlLongPressEnd) {
+              if (_touchedBarGroupIndex != null) {
+                setState(() => _touchedBarGroupIndex = null);
+              }
+              return;
+            }
+
+            // Mostra tooltip apenas durante o toque/arrasto
+            if (event is FlTapDownEvent ||
+                event is FlPanStartEvent ||
+                event is FlPanUpdateEvent ||
+                event is FlLongPressStart ||
+                event is FlLongPressMoveUpdate) {
+              final spot = response?.spot;
+              if (spot != null) {
+                final touched = spot.touchedBarGroupIndex;
+                if (_touchedBarGroupIndex != touched) {
+                  setState(() => _touchedBarGroupIndex = touched);
+                }
+              }
+            }
+          },
           touchTooltipData: BarTouchTooltipData(
-            tooltipBgColor: const Color(0xFF003a4d),
+            tooltipBgColor: _bgMid,
+            tooltipRoundedRadius: 8,
+            fitInsideHorizontally: true,
+            fitInsideVertically: true,
             getTooltipItem: (group, gi, rod, ri) {
-              final label = labels[gi];
-              final name = ri == 0 ? 'Prognóstico' : 'Produção';
+              if (ri != 0) return null;
+
+              final idx = group.x.toInt();
+              if (idx < 0 || idx >= labels.length) return null;
+
+              final label = labels[idx];
+              final hasProgRod = hasPrognostico && group.barRods.length > 1;
+              final progValue = hasProgRod ? group.barRods[0].toY : null;
+              final prodValue =
+                  hasProgRod ? group.barRods[1].toY : group.barRods[0].toY;
+              final desempValue = (hasDesempenho && idx < desempData.length)
+                  ? desempData[idx]
+                  : null;
+
+              final desempFmt = desempValue == null
+                  ? '-'
+                  : desempValue.toStringAsFixed(1).replaceAll('.', ',');
+
               return BarTooltipItem(
-                '$label\n$name\n${_fmtNum(rod.toY)} kWh',
-                const TextStyle(color: Colors.white, fontSize: 11),
+                '$label\n',
+                const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  height: 1.5,
+                  fontWeight: FontWeight.w600,
+                ),
+                children: [
+                  if (desempValue != null) ...[
+                    TextSpan(
+                      text: '■ ',
+                      style: const TextStyle(color: _lineDesemp),
+                    ),
+                    TextSpan(
+                      text: 'Desempenho (%): $desempFmt%\n',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                  if (progValue != null) ...[
+                    TextSpan(
+                      text: '■ ',
+                      style: const TextStyle(color: _barProg),
+                    ),
+                    TextSpan(
+                      text: 'Prognóstico: ${_fmtNum(progValue)} kWh\n',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                  TextSpan(
+                    text: '■ ',
+                    style: const TextStyle(color: _barProd),
+                  ),
+                  TextSpan(
+                    text: 'Produção: ${_fmtNum(prodValue)} kWh',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               );
             },
           ),
@@ -1092,59 +1446,14 @@ class UsinasTabState extends State<UsinasTab> {
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
+              interval: 1,
+              reservedSize: isPeriodo ? 24.0 : _bottomR,
               getTitlesWidget: (v, m) {
                 final i = v.toInt();
-                if (splitMesGroups) {
-                  if (i % 2 != 0) return const Text('');
-                  final labelIndex = i ~/ 2;
-                  if (labelIndex < 0 ||
-                      labelIndex >= labels.length ||
-                      labelIndex % 3 != 0) {
-                    return const Text('');
-                  }
-                  String lbl = labels[labelIndex];
-                  if (lbl.startsWith('Dia ')) {
-                    lbl = lbl.replaceFirst('Dia ', '');
-                  }
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(lbl,
-                        style: const TextStyle(
-                            fontSize: 9, color: Color(0xFF374151))),
-                  );
+                if (i < 0 || i >= labels.length) {
+                  return const Text('');
                 }
-
-                // Para o período anual, mostrar todos os meses
-                if (isAno) {
-                  if (i < 0 || i >= labels.length) {
-                    return const Text('');
-                  }
-                  String lbl = labels[i];
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(lbl,
-                        style: const TextStyle(
-                            fontSize: 8, color: Color(0xFF374151))),
-                  );
-                }
-
-                if (isPeriodo) {
-                  if (i < 0 || i >= labels.length) {
-                    return const Text('');
-                  }
-                  String lbl = labels[i];
-                  if (lbl.startsWith('Dia ')) {
-                    lbl = lbl.replaceFirst('Dia ', '');
-                  }
-                  return Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(lbl,
-                        style: const TextStyle(
-                            fontSize: 8, color: Color(0xFF374151))),
-                  );
-                }
-
-                if (i < 0 || i >= labels.length || i % step != 0) {
+                if (!isAno && i % step != 0) {
                   return const Text('');
                 }
                 String lbl = labels[i];
@@ -1152,10 +1461,16 @@ class UsinasTabState extends State<UsinasTab> {
                   lbl = lbl.replaceFirst('Dia ', '');
                 }
                 return Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(lbl,
-                      style: const TextStyle(
-                          fontSize: 9, color: Color(0xFF374151))),
+                  padding: const EdgeInsets.only(top: 3),
+                  child: Text(
+                    lbl,
+                    style: TextStyle(
+                      fontSize: isPeriodo ? 8.5 : 8,
+                      color: const Color(0xFF374151),
+                      fontWeight:
+                          isPeriodo ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                  ),
                 );
               },
             ),
@@ -1163,131 +1478,129 @@ class UsinasTabState extends State<UsinasTab> {
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: 36,
+              reservedSize: _leftR,
               getTitlesWidget: (v, m) => Text(
                 _shortNum(v),
-                style: const TextStyle(fontSize: 9, color: Color(0xFF6b7280)),
+                style: const TextStyle(
+                  fontSize: 8.5,
+                  color: Color(0xFF6b7280),
+                ),
               ),
             ),
           ),
           rightTitles: AxisTitles(
             sideTitles: SideTitles(
-              showTitles: hasPrognostico,
-              reservedSize: 36,
+              showTitles: hasDesempenho,
+              reservedSize: _rightR,
+              interval: maxY / 6,
               getTitlesWidget: (v, m) {
-                // Converter do eixo esquerdo (kWh) para porcentagem
-                final percentage = (v / maxY) * maxYPercentage;
+                final stepY = maxY / 6;
+                final idx = (v / stepY).round();
+                if (idx < 0 || idx > 6) {
+                  return const Text('');
+                }
+                if ((v - (idx * stepY)).abs() > stepY * 0.08) {
+                  return const Text('');
+                }
+
+                final pctRounded = idx * 20;
+
                 return Padding(
-                  padding: const EdgeInsets.only(left: 8),
+                  padding: const EdgeInsets.only(left: 4),
                   child: Text(
-                    '${percentage.toStringAsFixed(0)}%',
+                    '$pctRounded%',
                     style: const TextStyle(
-                      fontSize: 9,
-                      color: Color(0xFFef4444),
+                      fontSize: 8.5,
+                      color: _lineDesemp,
                     ),
                   ),
                 );
               },
             ),
           ),
-          topTitles:
-              const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          topTitles: const AxisTitles(
+            sideTitles: SideTitles(showTitles: false),
+          ),
         ),
         gridData: FlGridData(
           show: true,
           drawVerticalLine: false,
+          horizontalInterval: maxY / 6,
           getDrawingHorizontalLine: (_) => const FlLine(
             color: Color(0xFFe5e7eb),
             strokeWidth: 1,
           ),
         ),
         borderData: FlBorderData(show: false),
-        barGroups: splitMesGroups
-            ? labels.asMap().entries.expand((e) {
-                final prod = e.key < producao.length ? producao[e.key] : 0.0;
-                final prog =
-                    e.key < prognostico.length ? prognostico[e.key] : 0.0;
-                return [
-                  BarChartGroupData(
-                    x: e.key * 2,
-                    barRods: [
-                      BarChartRodData(
-                        toY: prog,
-                        color: const Color(0xFF004D66),
-                        width: barWidth,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(3),
-                          topRight: Radius.circular(3),
-                        ),
-                      ),
-                    ],
-                  ),
-                  BarChartGroupData(
-                    x: e.key * 2 + 1,
-                    barRods: [
-                      BarChartRodData(
-                        toY: prod,
-                        color: AppColors.accent,
-                        width: barWidth,
-                        borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(3),
-                          topRight: Radius.circular(3),
-                        ),
-                      ),
-                    ],
-                  ),
-                ];
-              }).toList()
-            : producao.asMap().entries.map((e) {
-                final rods = <BarChartRodData>[];
-                if (prognostico != null && e.key < prognostico.length) {
-                  rods.add(BarChartRodData(
-                    toY: prognostico[e.key],
-                    color: const Color(0xFF004D66),
-                    width: barWidth,
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(3),
-                      topRight: Radius.circular(3),
-                    ),
-                  ));
-                }
-                rods.add(BarChartRodData(
-                  toY: e.value,
-                  color: AppColors.accent,
-                  width: prognostico != null ? barWidth : singleBarWidth,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(3),
-                    topRight: Radius.circular(3),
-                  ),
-                ));
-                return BarChartGroupData(
-                  x: e.key,
-                  barRods: rods,
-                  barsSpace: barsSpace,
-                );
-              }).toList(),
+        barGroups: groups,
       ),
     );
-  }
 
-  Widget _legendItem(Color color, String label) {
-    return Row(
-      children: [
-        Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-              color: color, borderRadius: BorderRadius.circular(2)),
+    // CustomPainter para desenhar a linha de desempenho
+    Widget chartWithDesempenho() {
+      if (!hasDesempenho || desempData.isEmpty) {
+        return baseChart;
+      }
+
+      final lineLayer = IgnorePointer(
+        child: CustomPaint(
+          painter: DesempenhoLinePainter(
+            desempData: desempData,
+            maxY: maxY,
+            maxDesemp: maxDesemp,
+            nGroups: nGroups,
+            lineColor: _lineDesemp,
+            leftReserved: _leftR,
+            rightReserved: _rightR,
+            bottomReserved: _bottomR,
+            alignment: BarChartAlignment.center,
+            groupsSpace: groupsSpace,
+          ),
+          size: Size.infinite,
         ),
-        const SizedBox(width: 4),
-        Text(label,
-            style: const TextStyle(fontSize: 11, color: Color(0xFF6b7280))),
-      ],
-    );
-  }
+      );
 
-  String _shortNum(double v) {
-    if (v >= 1000) return '${(v / 1000).toStringAsFixed(0)}k';
-    return v.toStringAsFixed(0);
+      final tooltipAtiva = _touchedBarGroupIndex != null;
+
+      return Stack(
+        children: [
+          if (tooltipAtiva) ...[
+            lineLayer,
+            baseChart,
+          ] else ...[
+            baseChart,
+            lineLayer,
+          ],
+        ],
+      );
+    }
+
+    if (useScrollMes) {
+      final totalW = nGroups * pxPerGroup + _leftR + _rightR + 20;
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Container(
+          color: Colors.white,
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: totalW,
+              child: chartWithDesempenho(),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: chartWithDesempenho(),
+      ),
+    );
   }
 }
