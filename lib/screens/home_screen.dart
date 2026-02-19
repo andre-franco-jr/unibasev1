@@ -47,6 +47,34 @@ class _HomeScreenState extends State<HomeScreen> {
       const DRETab(),
     ];
 
+    const navItems = [
+      _NavItem(
+        icon: Icons.dashboard_outlined,
+        activeIcon: Icons.dashboard,
+        label: 'Dashboard',
+      ),
+      _NavItem(
+        icon: Icons.solar_power_outlined,
+        activeIcon: Icons.solar_power,
+        label: 'Usinas',
+      ),
+      _NavItem(
+        icon: Icons.folder_outlined,
+        activeIcon: Icons.folder,
+        label: 'Documentos',
+      ),
+      _NavItem(
+        icon: Icons.paid_outlined,
+        activeIcon: Icons.paid,
+        label: 'Financeiro',
+      ),
+      _NavItem(
+        icon: Icons.analytics_outlined,
+        activeIcon: Icons.analytics,
+        label: 'DRE',
+      ),
+    ];
+
     return Scaffold(
       backgroundColor: const Color(0xFF001f2e),
       appBar: AppBar(
@@ -104,45 +132,87 @@ class _HomeScreenState extends State<HomeScreen> {
                 BorderSide(color: AppColors.accent.withOpacity(0.25), width: 1),
           ),
         ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (i) => setState(() => _currentIndex = i),
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          selectedItemColor: AppColors.accent,
-          unselectedItemColor: Colors.white38,
-          selectedFontSize: 11,
-          unselectedFontSize: 11,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.dashboard_outlined),
-              activeIcon: Icon(Icons.dashboard),
-              label: 'Dashboard',
+        child: SafeArea(
+          top: false,
+          child: SizedBox(
+            height: 60,
+            child: Row(
+              children: List.generate(navItems.length, (index) {
+                final item = navItems[index];
+                final selected = _currentIndex == index;
+                final color = selected ? AppColors.accent : Colors.white38;
+                final xOffset = index == 3
+                    ? 6.0
+                    : index == 4
+                        ? -3.0
+                        : 0.0;
+
+                return Expanded(
+                  child: InkWell(
+                    onTap: () => setState(() => _currentIndex = index),
+                    child: Transform.translate(
+                      offset: Offset(xOffset, 0),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 2,
+                          vertical: 5,
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              selected ? item.activeIcon : item.icon,
+                              size: 20,
+                              color: color,
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              item.label,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 10,
+                                fontWeight: selected
+                                    ? FontWeight.w500
+                                    : FontWeight.w400,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            AnimatedContainer(
+                              duration: const Duration(milliseconds: 180),
+                              curve: Curves.easeOut,
+                              width: selected ? 16 : 0,
+                              height: 2,
+                              decoration: BoxDecoration(
+                                color: AppColors.accent,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.solar_power_outlined),
-              activeIcon: Icon(Icons.solar_power),
-              label: 'Usinas',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.folder_outlined),
-              activeIcon: Icon(Icons.folder),
-              label: 'Documentos',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.paid_outlined),
-              activeIcon: Icon(Icons.paid),
-              label: 'Financeiro',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.analytics_outlined),
-              activeIcon: Icon(Icons.analytics),
-              label: 'DRE',
-            ),
-          ],
+          ),
         ),
       ),
     );
   }
+}
+
+class _NavItem {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+
+  const _NavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+  });
 }

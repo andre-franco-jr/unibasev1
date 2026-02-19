@@ -305,8 +305,8 @@ class _DashboardTabState extends State<DashboardTab> {
         icon: Icons.people_outline,
         label: 'Beneficiários',
         value: '${d.totalBeneficiarios}',
-        unit: 'ativos',
-        sub: 'Ativos no período',
+        unit: 'ligados',
+        sub: 'Ligados no período',
       ),
       _CardData(
         icon: Icons.receipt_long_outlined,
@@ -332,10 +332,17 @@ class _DashboardTabState extends State<DashboardTab> {
       _CardData(
         icon: Icons.sell_outlined,
         label: 'Disponível p/ Venda',
-        value: _fmtBR(d.disponivelVenda.abs()),
+        value: d.disponivelVenda < 0
+            ? '-${_fmtBR(d.disponivelVenda.abs())}'
+            : _fmtBR(d.disponivelVenda),
         unit: 'kWh',
         sub: 'Capacidade - Alvo',
         negative: d.disponivelVenda < 0,
+        valueColor: d.disponivelVenda > 0
+            ? const Color(0xFF10b981)
+            : d.disponivelVenda == 0
+                ? _cardText
+                : null,
       ),
     ];
 
@@ -409,7 +416,8 @@ class _DashboardTabState extends State<DashboardTab> {
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
-                  color: c.negative ? const Color(0xFFdc2626) : _cardText,
+                  color: c.valueColor ??
+                      (c.negative ? const Color(0xFFdc2626) : _cardText),
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -852,6 +860,7 @@ class _CardData {
   final String unit;
   final String? sub;
   final bool negative;
+  final Color? valueColor;
 
   const _CardData({
     required this.icon,
@@ -860,5 +869,6 @@ class _CardData {
     required this.unit,
     this.sub,
     this.negative = false,
+    this.valueColor,
   });
 }
