@@ -40,4 +40,6 @@ class AppColors {
       primaryDarkest,
     ],
   );
+
+  static const Color background = Color(0xFFF7F9FC);
 }

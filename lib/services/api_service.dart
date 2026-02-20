@@ -118,11 +118,12 @@ class ApiService {
 
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('access_token');
-    await prefs.remove('refresh_token');
-    await prefs.remove('username');
-    await prefs.remove('user_nome');
+
+    // Ajuste/chaves conforme seu projeto real:
+    await prefs.remove('token');
     await prefs.remove('user_role');
+    await prefs.remove('user');
+    await prefs.remove('refresh_token');
   }
 
   static Future<bool> isLoggedIn() async {
@@ -230,7 +231,7 @@ class ApiService {
   // INVESTIDOR — Gráfico de geração mensal
   // Body: {geradores: ["51-JMD05"], ano: 2026}
   // Retorna: {ano, dados: [{mes, mes_nome, prognostico,
-  //   realizado_inversor, compensado, faturado}]}
+  //   realizado_inversor, compensado, faturado}]}.
   // ─────────────────────────────────────────
 
   static Future<Map<String, dynamic>> getGraficoGeracao({
@@ -343,10 +344,6 @@ class ApiService {
     return '$_baseUrl/api/mobile/investor/documentos/download/$arquivoId';
   }
 
-// ═══════════════════════════════════════════════════════════════
-// ADICIONAR NO api_service.dart — substitui o método getDRE()
-// ═══════════════════════════════════════════════════════════════
-
   // ─────────────────────────────────────────
   // DRE — Lista usinas do investidor
   // ─────────────────────────────────────────
@@ -384,16 +381,104 @@ class ApiService {
     }
   }
 
-// ═══════════════════════════════════════════════════════════════
-// REMOVER (ou comentar) o método getDRE() antigo:
-// ═══════════════════════════════════════════════════════════════
-//
-//  static Future<Map<String, dynamic>> getDRE() async {
-//    try {
-//      final response = await _dio.get('/api/mobile/investor/dre');
-//      return response.data;
-//    } on DioException catch (e) {
-//      throw Exception('Erro ao buscar DRE: ${e.message}');
-//    }
-//  }
+  // ─────────────────────────────────────────
+  // CLIENTE: Dashboard saldos
+  // ─────────────────────────────────────────
+  static Future<Map<String, dynamic>> clienteDashboardSaldos() async {
+    try {
+      final response = await _dio.get('/api/mobile/cliente/dashboard-saldos');
+      return response.data;
+    } on DioException catch (e) {
+      throw Exception('Erro ao buscar dashboard saldos: ${e.message}');
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // CLIENTE: Último mês
+  // ─────────────────────────────────────────
+  static Future<Map<String, dynamic>> clienteDashboardUltimoMes({
+    String? mes,
+  }) async {
+    try {
+      final params = mes != null ? <String, String>{'mes': mes} : null;
+      final response = await _dio.get(
+        '/api/mobile/cliente/dashboard-ultimo-mes',
+        queryParameters: params,
+      );
+      return response.data;
+    } on DioException catch (e) {
+      throw Exception('Erro ao buscar último mês: ${e.message}');
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // CLIENTE: Gráfico 12 meses
+  // ─────────────────────────────────────────
+  static Future<List<dynamic>> clienteDashboardGrafico({
+    List<String> contas = const [],
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/api/mobile/cliente/dashboard-grafico',
+        data: {'contas': contas},
+      );
+      return response.data['dados_por_mes'] as List? ?? [];
+    } on DioException catch (e) {
+      throw Exception('Erro ao buscar gráfico: ${e.message}');
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // CLIENTE: Contas disponíveis
+  // ─────────────────────────────────────────
+  static Future<List<dynamic>> clienteContasDisponiveis() async {
+    try {
+      final response = await _dio.get('/api/mobile/cliente/contas-disponiveis');
+      return response.data['contas'] as List? ?? [];
+    } on DioException catch (e) {
+      throw Exception('Erro ao buscar contas: ${e.message}');
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // CLIENTE: Contas Neoenergia
+  // ─────────────────────────────────────────
+  static Future<List<dynamic>> clienteContasNeoenergia() async {
+    try {
+      final response = await _dio.get('/api/mobile/cliente/contas-neoenergia');
+      return response.data['data'] as List? ?? [];
+    } on DioException catch (e) {
+      throw Exception('Erro ao buscar contas Neoenergia: ${e.message}');
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // CLIENTE: Documentos — pastas
+  // ─────────────────────────────────────────
+  static Future<List<dynamic>> clienteDocumentosPastas() async {
+    try {
+      final response = await _dio.get('/api/mobile/cliente/documentos/pastas');
+      return response.data['pastas'] as List? ?? [];
+    } on DioException catch (e) {
+      throw Exception('Erro ao buscar pastas: ${e.message}');
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // CLIENTE: Documentos — arquivos
+  // ─────────────────────────────────────────
+  static Future<List<dynamic>> clienteDocumentosArquivos({
+    String? pasta,
+  }) async {
+    try {
+      final params = pasta != null ? <String, String>{'pasta': pasta} : null;
+      final response = await _dio.get(
+        '/api/mobile/cliente/documentos/arquivos',
+        queryParameters: params,
+      );
+      return response.data['arquivos'] as List? ?? [];
+    } on DioException catch (e) {
+      throw Exception('Erro ao buscar arquivos: ${e.message}');
+    }
+  }
 }

@@ -3,6 +3,7 @@ import '../services/api_service.dart';
 import '../constants/app_colors.dart';
 import 'dashboard_screen.dart';
 import 'home_screen.dart';
+import '../core/auth/auth_gate.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -48,16 +49,15 @@ class _LoginScreenState extends State<LoginScreen> {
         // Limpar senha da memória
         _passwordController.clear();
 
-        Widget destination;
-        if (role == 'investor') {
-          destination = const HomeScreen();
-        } else {
-          destination = const DashboardScreen();
+        Future<void> _onLoginSuccess() async {
+          if (!mounted) return;
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const AuthGate()),
+            (route) => false,
+          );
         }
 
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => destination),
-        );
+        await _onLoginSuccess();
       } else {
         setState(() {
           _errorMessage = 'Falha ao fazer login. Verifique suas credenciais.';
@@ -143,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           },
                           onFieldSubmitted: (_) => _handleLogin(),
                         ),
-                        if (_errorMessage != null) ...[
+                        if (_errorMessage != null) ... [
                           const SizedBox(height: 16),
                           Container(
                             padding: const EdgeInsets.all(12),
