@@ -3,7 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 
 const _bgDark = Color(0xFF001f2e);
-const _bgMid  = Color(0xFF003a4d);
+const _bgMid = Color(0xFF003a4d);
 const _bgCard = Color(0xFF004D66);
 const _accent = Color(0xFFEAC248);
 
@@ -20,7 +20,7 @@ class ClienteContasTabState extends State<ClienteContasTab> {
   bool _loading = true;
 
   // Filtros
-  String _busca      = '';
+  String _busca = '';
   String? _mesAtivo; // ref_mes_ano no formato "MM/YYYY"
   final _buscaCtrl = TextEditingController();
 
@@ -44,8 +44,8 @@ class ClienteContasTabState extends State<ClienteContasTab> {
       final r = await ApiService.clienteContasNeoenergia();
       if (!mounted) return;
       setState(() {
-        _contas   = List<Map<String, dynamic>>.from(r);
-        _loading  = false;
+        _contas = List<Map<String, dynamic>>.from(r);
+        _loading = false;
       });
       _aplicarFiltro();
     } catch (_) {
@@ -56,11 +56,14 @@ class ClienteContasTabState extends State<ClienteContasTab> {
   void _aplicarFiltro() {
     setState(() {
       _filtradas = _contas.where((c) {
-        final mesOk  = _mesAtivo == null || c['ref_mes_ano'] == _mesAtivo;
-        final termo  = _busca.toLowerCase();
-        final busOk  = termo.isEmpty ||
+        final mesOk = _mesAtivo == null || c['ref_mes_ano'] == _mesAtivo;
+        final termo = _busca.toLowerCase();
+        final busOk = termo.isEmpty ||
             (c['codigo_cliente'] ?? '').toString().contains(termo) ||
-            (c['beneficiario_nome'] ?? '').toString().toLowerCase().contains(termo) ||
+            (c['beneficiario_nome'] ?? '')
+                .toString()
+                .toLowerCase()
+                .contains(termo) ||
             (c['nome_cliente'] ?? '').toString().toLowerCase().contains(termo);
         return mesOk && busOk;
       }).toList();
@@ -98,13 +101,12 @@ class ClienteContasTabState extends State<ClienteContasTab> {
           _buildFiltros(),
           Expanded(
             child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(color: _accent))
+                ? const Center(child: CircularProgressIndicator(color: _accent))
                 : _filtradas.isEmpty
                     ? const Center(
                         child: Text('Nenhuma conta encontrada',
-                            style: TextStyle(
-                                color: Colors.white38, fontSize: 13)))
+                            style:
+                                TextStyle(color: Colors.white38, fontSize: 13)))
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
                         itemCount: _filtradas.length,
@@ -140,8 +142,7 @@ class ClienteContasTabState extends State<ClienteContasTab> {
                 contentPadding: EdgeInsets.symmetric(horizontal: 12),
                 hintText: 'Buscar por conta ou beneficiário...',
                 hintStyle: TextStyle(color: Colors.white38, fontSize: 12),
-                prefixIcon:
-                    Icon(Icons.search, color: _accent, size: 18),
+                prefixIcon: Icon(Icons.search, color: _accent, size: 18),
               ),
               onChanged: (v) {
                 _busca = v;
@@ -199,10 +200,10 @@ class ClienteContasTabState extends State<ClienteContasTab> {
   // ── CARD DE CONTA ────────────────────────────────────────────────────────────
 
   Widget _buildContaCard(Map<String, dynamic> conta) {
-    final temBoleto   = conta['bank_slip_url'] != null;
-    final temFatura   = conta['fatura_url'] != null;
-    final temNeo      = conta['file_url'] != null;
-    final temUni      = conta['fatura_unienergy_url'] != null;
+    final temBoleto = conta['bank_slip_url'] != null;
+    final temFatura = conta['fatura_url'] != null;
+    final temNeo = conta['file_url'] != null;
+    final temUni = conta['fatura_unienergy_url'] != null;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -234,7 +235,8 @@ class ClienteContasTabState extends State<ClienteContasTab> {
                     children: [
                       Text(
                         conta['beneficiario_nome'] ??
-                            conta['nome_cliente'] ?? '—',
+                            conta['nome_cliente'] ??
+                            '—',
                         style: const TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -253,13 +255,12 @@ class ClienteContasTabState extends State<ClienteContasTab> {
                 ),
                 // Badge mês
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 8, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
                     color: _accent.withOpacity(0.15),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: _accent.withOpacity(0.5)),
+                    border: Border.all(color: _accent.withOpacity(0.5)),
                   ),
                   child: Text(
                     conta['ref_mes_ano'] ?? '',
@@ -278,14 +279,10 @@ class ClienteContasTabState extends State<ClienteContasTab> {
             padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
             child: Row(
               children: [
-                _valorItem(
-                    'Conta Neoenergia',
-                    _toD(conta['total_conta']),
+                _valorItem('Conta Neoenergia', _toD(conta['total_conta']),
                     conta['vencimento_conta']),
                 const SizedBox(width: 8),
-                _valorItem(
-                    'Fatura Unienergy',
-                    _toD(conta['total_fatura']),
+                _valorItem('Fatura Unienergy', _toD(conta['total_fatura']),
                     conta['vencimento_fatura']),
               ],
             ),
@@ -349,13 +346,10 @@ class ClienteContasTabState extends State<ClienteContasTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(label,
-                style: const TextStyle(
-                    fontSize: 9, color: Color(0xFFb0c4ce))),
+                style: const TextStyle(fontSize: 9, color: Color(0xFFb0c4ce))),
             const SizedBox(height: 3),
             Text(
-              valor > 0
-                  ? 'R\$ ${valor.toStringAsFixed(2)}'
-                  : '—',
+              valor > 0 ? 'R\$ ${valor.toStringAsFixed(2)}' : '—',
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
@@ -365,8 +359,7 @@ class ClienteContasTabState extends State<ClienteContasTab> {
             if (vencimento != null)
               Text(
                 'Venc: $vencimento',
-                style: const TextStyle(
-                    fontSize: 9, color: Color(0xFFb0c4ce)),
+                style: const TextStyle(fontSize: 9, color: Color(0xFFb0c4ce)),
               ),
           ],
         ),
@@ -374,8 +367,7 @@ class ClienteContasTabState extends State<ClienteContasTab> {
     );
   }
 
-  Widget _downloadBtn(
-      IconData icon, String label, String? url, Color color) {
+  Widget _downloadBtn(IconData icon, String label, String? url, Color color) {
     if (url == null) return const SizedBox.shrink();
     return GestureDetector(
       onTap: () async {
@@ -397,9 +389,7 @@ class ClienteContasTabState extends State<ClienteContasTab> {
             const SizedBox(width: 5),
             Text(label,
                 style: TextStyle(
-                    fontSize: 11,
-                    color: color,
-                    fontWeight: FontWeight.w600)),
+                    fontSize: 11, color: color, fontWeight: FontWeight.w600)),
           ],
         ),
       ),

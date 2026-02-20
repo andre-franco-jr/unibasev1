@@ -72,8 +72,7 @@ class ApiService {
       );
       if (response.data['success'] == true) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(
-            'access_token', response.data['access_token']);
+        await prefs.setString('access_token', response.data['access_token']);
         return true;
       }
       return false;
@@ -98,15 +97,11 @@ class ApiService {
 
       if (response.data['success'] == true) {
         final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(
-            'access_token', response.data['access_token']);
-        await prefs.setString(
-            'refresh_token', response.data['refresh_token']);
+        await prefs.setString('access_token', response.data['access_token']);
+        await prefs.setString('refresh_token', response.data['refresh_token']);
         await prefs.setString('username', username);
-        await prefs.setString(
-            'user_nome', response.data['user']['nome']);
-        await prefs.setString(
-            'user_role', response.data['user']['role']);
+        await prefs.setString('user_nome', response.data['user']['nome']);
+        await prefs.setString('user_role', response.data['user']['role']);
       }
 
       return response.data;
@@ -192,8 +187,7 @@ class ApiService {
 
   static Future<List<Gerador>> getGeradores() async {
     try {
-      final response =
-          await _dio.get('/api/mobile/investor/geradores');
+      final response = await _dio.get('/api/mobile/investor/geradores');
       if (response.data['success'] == true) {
         final List<dynamic> json = response.data['geradores'];
         return json.map((j) => Gerador.fromJson(j)).toList();
@@ -258,8 +252,7 @@ class ApiService {
 
   static Future<List<Usina>> getUsinasInvestidor() async {
     try {
-      final response =
-          await _dio.get('/api/mobile/investor/usinas');
+      final response = await _dio.get('/api/mobile/investor/usinas');
       if (response.data['success'] == true) {
         final List<dynamic> json = response.data['usinas'];
         return json.map((j) => Usina.fromJson(j)).toList();
@@ -312,8 +305,7 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getDocumentosPastas() async {
     try {
-      final response = await _dio
-          .get('/api/mobile/investor/documentos/pastas');
+      final response = await _dio.get('/api/mobile/investor/documentos/pastas');
       return response.data;
     } on DioException catch (e) {
       throw Exception('Erro ao buscar pastas: ${e.message}');
@@ -327,8 +319,7 @@ class ApiService {
     String? pasta,
   }) async {
     try {
-      final params =
-          pasta != null ? <String, dynamic>{'pasta': pasta} : null;
+      final params = pasta != null ? <String, dynamic>{'pasta': pasta} : null;
       final response = await _dio.get(
         '/api/mobile/investor/documentos/arquivos',
         queryParameters: params,
