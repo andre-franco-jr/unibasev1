@@ -566,8 +566,8 @@ class _DashboardTabState extends State<DashboardTab> {
                     }
                   },
                   touchTooltipData: BarTouchTooltipData(
-                    tooltipBgColor: _bgMid,
-                    tooltipRoundedRadius: 8,
+                    getTooltipColor: (_) => _bgMid,
+                    tooltipBorderRadius: BorderRadius.circular(8),
                     fitInsideHorizontally: true,
                     fitInsideVertically: true,
                     getTooltipItem: (group, gi, rod, ri) {

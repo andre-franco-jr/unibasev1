@@ -1119,8 +1119,8 @@ class UsinasTabState extends State<UsinasTab> {
           lineTouchData: LineTouchData(
             handleBuiltInTouches: true,
             touchTooltipData: LineTouchTooltipData(
-              tooltipBgColor: _bgMid,
-              tooltipRoundedRadius: 6,
+              getTooltipColor: (_) => _bgMid,
+              tooltipBorder: BorderSide(color: _accent.withOpacity(0.3)),
               fitInsideHorizontally: true,
               fitInsideVertically: true,
               getTooltipItems: (spots) => spots
@@ -1368,8 +1368,8 @@ class UsinasTabState extends State<UsinasTab> {
             }
           },
           touchTooltipData: BarTouchTooltipData(
-            tooltipBgColor: _bgMid,
-            tooltipRoundedRadius: 8,
+            getTooltipColor: (_) => _bgMid,
+            tooltipBorder: BorderSide(color: _accent.withOpacity(0.3)),
             fitInsideHorizontally: true,
             fitInsideVertically: true,
             getTooltipItem: (group, gi, rod, ri) {

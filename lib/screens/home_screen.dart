@@ -26,6 +26,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final GlobalKey<UsinasTabState> _usinasKey = GlobalKey<UsinasTabState>();
   final GlobalKey<State<DocumentosTab>> _documentosKey =
       GlobalKey<State<DocumentosTab>>();
+  final GlobalKey<DRETabState> _dreKey = GlobalKey<DRETabState>();
 
   Future<void> _handleRefresh() async {
     if (_currentIndex == 0) {
@@ -34,6 +35,8 @@ class _HomeScreenState extends State<HomeScreen> {
       await _usinasKey.currentState?.refresh();
     } else if (_currentIndex == 2) {
       await (_documentosKey.currentState as dynamic)?.refresh();
+    } else if (_currentIndex == 4) {
+      await _dreKey.currentState?.refresh();
     }
   }
 
@@ -44,7 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
       UsinasTab(key: _usinasKey),
       DocumentosTab(key: _documentosKey),
       const FinanceiroTab(),
-      const DRETab(),
+      DRETab(key: _dreKey),
     ];
 
     const navItems = [

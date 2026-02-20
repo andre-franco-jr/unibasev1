@@ -343,17 +343,57 @@ class ApiService {
     return '$_baseUrl/api/mobile/investor/documentos/download/$arquivoId';
   }
 
-  // ─────────────────────────────────────────
-  // DRE — Em breve
-  // ─────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// ADICIONAR NO api_service.dart — substitui o método getDRE()
+// ═══════════════════════════════════════════════════════════════
 
-  static Future<Map<String, dynamic>> getDRE() async {
+  // ─────────────────────────────────────────
+  // DRE — Lista usinas do investidor
+  // ─────────────────────────────────────────
+  static Future<List<dynamic>> getDreUsinas() async {
     try {
-      final response =
-          await _dio.get('/api/mobile/investor/dre');
-      return response.data;
+      final response = await _dio.get('/api/mobile/investor/dre/usinas');
+      if (response.data['success'] == true) {
+        return response.data['usinas'] as List;
+      }
+      return [];
+    } on DioException catch (e) {
+      throw Exception('Erro ao buscar usinas DRE: ${e.message}');
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // DRE — Dados completos de uma usina/ano
+  // Retorna: {linhas, valores, meses_liberados, geracao}
+  // ─────────────────────────────────────────
+  static Future<Map<String, dynamic>> getDreDados({
+    required int idPlanta,
+    required int ano,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/api/mobile/investor/dre/dados',
+        queryParameters: {'id_planta': idPlanta, 'ano': ano},
+      );
+      if (response.data['success'] == true) {
+        return Map<String, dynamic>.from(response.data);
+      }
+      throw Exception(response.data['message'] ?? 'Erro ao buscar DRE');
     } on DioException catch (e) {
       throw Exception('Erro ao buscar DRE: ${e.message}');
     }
   }
+
+// ═══════════════════════════════════════════════════════════════
+// REMOVER (ou comentar) o método getDRE() antigo:
+// ═══════════════════════════════════════════════════════════════
+//
+//  static Future<Map<String, dynamic>> getDRE() async {
+//    try {
+//      final response = await _dio.get('/api/mobile/investor/dre');
+//      return response.data;
+//    } on DioException catch (e) {
+//      throw Exception('Erro ao buscar DRE: ${e.message}');
+//    }
+//  }
 }
