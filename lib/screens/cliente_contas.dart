@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:intl/intl.dart';
 import '../services/api_service.dart';
 
 const _bgDark = Color(0xFF001f2e);
@@ -21,6 +22,7 @@ class ClienteContasTabState extends State<ClienteContasTab> {
   List<Map<String, dynamic>> _contas = [];
   List<Map<String, dynamic>> _filtradas = [];
   bool _loading = true;
+  final Set<int> _expandidos = {}; // Controla quais cards estão expandidos
 
   // Filtros
   String _busca = '';
@@ -82,6 +84,47 @@ class ClienteContasTabState extends State<ClienteContasTab> {
     return 0.0;
   }
 
+  String _formatarData(String? dataStr) {
+    if (dataStr == null || dataStr.isEmpty) return '';
+
+    final dataLimpa = dataStr.trim();
+
+    // Se for um placeholder, não exibe
+    if (dataLimpa.contains('%')) return '';
+
+    try {
+      DateTime data;
+
+      // ISO 8601: 2024-03-15T00:00:00.000Z ou 2024-03-15T00:00:00
+      if (dataLimpa.contains('T')) {
+        data = DateTime.parse(dataLimpa);
+      }
+      // yyyy-MM-dd
+      else if (RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(dataLimpa)) {
+        data = DateTime.parse(dataLimpa);
+      }
+      // dd/MM/yyyy - já está formatado
+      else if (RegExp(r'^\d{2}/\d{2}/\d{4}').hasMatch(dataLimpa)) {
+        return dataLimpa;
+      }
+      // MM/dd/yyyy
+      else if (RegExp(r'^\d{2}/\d{2}/\d{4}').hasMatch(dataLimpa)) {
+        final partes = dataLimpa.split('/');
+        data = DateTime(
+            int.parse(partes[2]), int.parse(partes[0]), int.parse(partes[1]));
+      }
+      // Se não reconhecer, retorna o original (melhor que nada)
+      else {
+        return dataLimpa;
+      }
+
+      return DateFormat('dd/MM/yyyy').format(data);
+    } catch (e) {
+      // Em caso de erro, mostra o valor original
+      return dataLimpa;
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // BUILD
   // ═══════════════════════════════════════════════════════════════════════════
@@ -104,7 +147,8 @@ class ClienteContasTabState extends State<ClienteContasTab> {
                     : ListView.builder(
                         padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
                         itemCount: _filtradas.length,
-                        itemBuilder: (_, i) => _buildContaCard(_filtradas[i]),
+                        itemBuilder: (_, i) =>
+                            _buildContaCard(_filtradas[i], i),
                       ),
           ),
         ],
@@ -146,11 +190,13 @@ class ClienteContasTabState extends State<ClienteContasTab> {
           ),
           const SizedBox(height: 8),
           // Seletor de calendário
-          Row(
-            children: [
-              Expanded(child: _buildSeletorCalendario()),
-              const SizedBox(width: 8),
-              if (_mesAtivo != null)
+          if (_mesAtivo == null)
+            _buildSeletorCalendario()
+          else
+            Row(
+              children: [
+                Expanded(child: _buildSeletorCalendario()),
+                const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () {
                     setState(() {
@@ -160,7 +206,8 @@ class ClienteContasTabState extends State<ClienteContasTab> {
                     _aplicarFiltro();
                   },
                   child: Container(
-                    padding: const EdgeInsets.all(8),
+                    height: 38,
+                    width: 38,
                     decoration: BoxDecoration(
                       color: _bgCard,
                       borderRadius: BorderRadius.circular(8),
@@ -169,8 +216,8 @@ class ClienteContasTabState extends State<ClienteContasTab> {
                     child: const Icon(Icons.clear, color: _accent, size: 18),
                   ),
                 ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -180,7 +227,7 @@ class ClienteContasTabState extends State<ClienteContasTab> {
     return GestureDetector(
       onTap: _abrirCalendario,
       child: Container(
-        height: 40,
+        height: 38,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: _mesAtivo != null ? _accent.withOpacity(0.15) : _bgCard,
@@ -243,11 +290,12 @@ class ClienteContasTabState extends State<ClienteContasTab> {
 
   // ── CARD DE CONTA ────────────────────────────────────────────────────────────
 
-  Widget _buildContaCard(Map<String, dynamic> conta) {
+  Widget _buildContaCard(Map<String, dynamic> conta, int index) {
     final temBoleto = conta['bank_slip_url'] != null;
     final temFatura = conta['fatura_url'] != null;
     final temNeo = conta['file_url'] != null;
     final temUni = conta['fatura_unienergy_url'] != null;
+    final isExpanded = _expandidos.contains(index);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -258,162 +306,191 @@ class ClienteContasTabState extends State<ClienteContasTab> {
       ),
       child: Column(
         children: [
-          // Cabeçalho
-          Container(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            decoration: BoxDecoration(
-              color: _bgCard,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(10),
-                topRight: Radius.circular(10),
+          // Cabeçalho (sempre visível e clicável)
+          InkWell(
+            onTap: () {
+              setState(() {
+                if (isExpanded) {
+                  _expandidos.remove(index);
+                } else {
+                  _expandidos.add(index);
+                }
+              });
+            },
+            borderRadius: BorderRadius.vertical(
+              top: const Radius.circular(10),
+              bottom: isExpanded ? Radius.zero : const Radius.circular(10),
+            ),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+              decoration: BoxDecoration(
+                color: _bgCard,
+                borderRadius: BorderRadius.vertical(
+                  top: const Radius.circular(10),
+                  bottom: isExpanded ? Radius.zero : const Radius.circular(10),
+                ),
               ),
-            ),
-            child: Row(
-              children: [
-                const Icon(Icons.receipt_long_outlined,
-                    color: _accent, size: 16),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        conta['beneficiario_nome'] ??
-                            conta['nome_cliente'] ??
-                            '—',
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        'Conta: ${conta['codigo_cliente'] ?? '—'}',
-                        style: const TextStyle(
-                            fontSize: 10, color: Color(0xFFb0c4ce)),
-                      ),
-                    ],
-                  ),
-                ),
-                // Badge mês
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: _accent.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: _accent.withOpacity(0.5)),
-                  ),
-                  child: Text(
-                    conta['ref_mes_ano'] ?? '',
-                    style: const TextStyle(
-                        fontSize: 10,
-                        color: _accent,
-                        fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Valores
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
-            child: Row(
-              children: [
-                _valorItem('Conta Neoenergia', _toD(conta['total_conta']),
-                    conta['vencimento_conta']),
-                const SizedBox(width: 8),
-                _valorItem('Fatura Unienergy', _toD(conta['total_fatura']),
-                    conta['vencimento_fatura']),
-              ],
-            ),
-          ),
-
-          // Botões de download em grid 2x2
-          if (temBoleto || temFatura || temNeo || temUni)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-              child: Column(
+              child: Row(
                 children: [
-                  // Primeira linha (2 botões)
-                  Row(
-                    children: [
-                      if (temBoleto)
-                        Expanded(
-                          child: _downloadBtn(
-                            Icons.barcode_reader,
-                            'Boleto',
-                            conta['bank_slip_url'],
-                            Colors.orange,
-                          ),
-                        ),
-                      if (temBoleto && (temFatura || temNeo || temUni))
-                        const SizedBox(width: 6),
-                      if (temFatura)
-                        Expanded(
-                          child: _downloadBtn(
-                            Icons.description_outlined,
-                            'Fatura Uni',
-                            conta['fatura_url'],
-                            _accent,
-                          ),
-                        ),
-                      // Se só tem Boleto, preenche o espaço
-                      if (temBoleto && !temFatura && !temNeo && !temUni)
-                        const Expanded(child: SizedBox()),
-                      // Se não tem Boleto mas tem Fatura, e não tem Neo nem Uni
-                      if (!temBoleto && temFatura && !temNeo && !temUni)
-                        const Expanded(child: SizedBox()),
-                    ],
-                  ),
-                  // Espaçamento entre linhas
-                  if ((temBoleto || temFatura) && (temNeo || temUni))
-                    const SizedBox(height: 6),
-                  // Segunda linha (2 botões)
-                  if (temNeo || temUni)
-                    Row(
+                  const Icon(Icons.receipt_long_outlined,
+                      color: _accent, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (temNeo)
-                          Expanded(
-                            child: _downloadBtn(
-                              Icons.bolt_outlined,
-                              'Conta Neo',
-                              conta['file_url'],
-                              const Color(0xFF148bad),
-                            ),
+                        Text(
+                          conta['beneficiario_nome'] ??
+                              conta['nome_cliente'] ??
+                              '—',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
                           ),
-                        if (temNeo && temUni) const SizedBox(width: 6),
-                        if (temUni)
-                          Expanded(
-                            child: _downloadBtn(
-                              Icons.picture_as_pdf_outlined,
-                              'PDF Uni',
-                              conta['fatura_unienergy_url'] != null
-                                  ? 'https://unienergyportal.com${conta['fatura_unienergy_url']}'
-                                  : null,
-                              const Color(0xFF10b981),
-                            ),
-                          ),
-                        // Se só tem Neo, preenche o espaço
-                        if (temNeo && !temUni)
-                          const Expanded(child: SizedBox()),
-                        // Se só tem Uni (sem Neo)
-                        if (!temNeo && temUni)
-                          const Expanded(child: SizedBox()),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        Text(
+                          'Conta: ${conta['codigo_cliente'] ?? '—'}',
+                          style: const TextStyle(
+                              fontSize: 10, color: Color(0xFFb0c4ce)),
+                        ),
                       ],
                     ),
+                  ),
+                  // Badge mês
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: _accent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: _accent.withOpacity(0.5)),
+                    ),
+                    child: Text(
+                      conta['ref_mes_ano'] ?? '',
+                      style: const TextStyle(
+                          fontSize: 10,
+                          color: _accent,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Ícone de expansão
+                  Icon(
+                    isExpanded ? Icons.expand_less : Icons.expand_more,
+                    color: _accent,
+                    size: 20,
+                  ),
                 ],
               ),
             ),
+          ),
+
+          // Conteúdo expansível (valores e botões)
+          if (isExpanded) ...[
+            // Valores
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
+              child: Row(
+                children: [
+                  _valorItem('Conta Neoenergia', _toD(conta['total_conta']),
+                      conta['vencimento_conta']),
+                  const SizedBox(width: 8),
+                  _valorItem('Fatura Unienergy', _toD(conta['total_fatura']),
+                      conta['vencimento_fatura']),
+                ],
+              ),
+            ),
+
+            // Botões de download em grid 2x2
+            if (temBoleto || temFatura || temNeo || temUni)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                child: Column(
+                  children: [
+                    // Primeira linha (2 botões)
+                    Row(
+                      children: [
+                        if (temBoleto)
+                          Expanded(
+                            child: _downloadBtn(
+                              Icons.barcode_reader,
+                              'Boleto',
+                              conta['bank_slip_url'],
+                              Colors.orange,
+                            ),
+                          ),
+                        if (temBoleto && (temFatura || temNeo || temUni))
+                          const SizedBox(width: 6),
+                        if (temFatura)
+                          Expanded(
+                            child: _downloadBtn(
+                              Icons.description_outlined,
+                              'Fatura Uni',
+                              conta['fatura_url'],
+                              _accent,
+                            ),
+                          ),
+                        // Se só tem Boleto, preenche o espaço
+                        if (temBoleto && !temFatura && !temNeo && !temUni)
+                          const Expanded(child: SizedBox()),
+                        // Se não tem Boleto mas tem Fatura, e não tem Neo nem Uni
+                        if (!temBoleto && temFatura && !temNeo && !temUni)
+                          const Expanded(child: SizedBox()),
+                      ],
+                    ),
+                    // Espaçamento entre linhas
+                    if ((temBoleto || temFatura) && (temNeo || temUni))
+                      const SizedBox(height: 6),
+                    // Segunda linha (2 botões)
+                    if (temNeo || temUni)
+                      Row(
+                        children: [
+                          if (temNeo)
+                            Expanded(
+                              child: _downloadBtn(
+                                Icons.bolt_outlined,
+                                'Conta Neo',
+                                conta['file_url'],
+                                const Color(0xFF148bad),
+                              ),
+                            ),
+                          if (temNeo && temUni) const SizedBox(width: 6),
+                          if (temUni)
+                            Expanded(
+                              child: _downloadBtn(
+                                Icons.picture_as_pdf_outlined,
+                                'PDF Uni',
+                                conta['fatura_unienergy_url'] != null
+                                    ? 'https://unienergyportal.com${conta['fatura_unienergy_url']}'
+                                    : null,
+                                const Color(0xFF10b981),
+                              ),
+                            ),
+                          // Se só tem Neo, preenche o espaço
+                          if (temNeo && !temUni)
+                            const Expanded(child: SizedBox()),
+                          // Se só tem Uni (sem Neo)
+                          if (!temNeo && temUni)
+                            const Expanded(child: SizedBox()),
+                        ],
+                      ),
+                  ],
+                ),
+              ),
+          ],
         ],
       ),
     );
   }
 
   Widget _valorItem(String label, double valor, String? vencimento) {
+    final dataFormatada = _formatarData(vencimento);
+    final dataExibir =
+        dataFormatada.isNotEmpty ? dataFormatada : (vencimento ?? '');
+
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -435,9 +512,9 @@ class ClienteContasTabState extends State<ClienteContasTab> {
                 color: Colors.white,
               ),
             ),
-            if (vencimento != null)
+            if (dataExibir.isNotEmpty && !dataExibir.contains('%'))
               Text(
-                'Venc: $vencimento',
+                'Venc: $dataExibir',
                 style: const TextStyle(fontSize: 9, color: Color(0xFFb0c4ce)),
               ),
           ],
