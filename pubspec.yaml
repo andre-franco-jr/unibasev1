@@ -16,11 +16,17 @@ dependencies:
   # Local storage
   shared_preferences: ^2.2.2
   
+  # File management
+  path_provider: ^2.1.1
+  
   # Charts
   fl_chart: ^1.1.1
   
   # Icons
   cupertino_icons: ^1.0.6
+  
+  # Internacionalização
+  intl: ^0.20.2
   flutter_localizations:
     sdk: flutter
 

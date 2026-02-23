@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 import '../core/auth/auth_gate.dart';
 import 'cliente_dashboard.dart';
-import 'cliente_faturas.dart';
+import 'cliente_contas.dart';
 import 'cliente_perfil.dart';
 
 class ClientShellScreen extends StatefulWidget {

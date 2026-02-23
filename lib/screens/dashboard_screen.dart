@@ -133,6 +133,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _usinas.map((u) => u.potenciaAtual).reduce((a, b) => a > b ? a : b);
     }
 
+    // Garantir que max nunca seja 0 para evitar erro no gráfico
+    if (max == 0) max = 10;
+
     return max * 1.2; // 20% a mais para margem
   }
 
@@ -346,7 +349,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                           gridData: FlGridData(
                                             show: true,
                                             drawVerticalLine: false,
-                                            horizontalInterval: _getMaxY() / 5,
+                                            horizontalInterval: (_getMaxY() / 5)
+                                                .clamp(0.1, double.infinity),
                                             getDrawingHorizontalLine: (value) {
                                               return FlLine(
                                                 color: Colors.grey.shade200,

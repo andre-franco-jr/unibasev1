@@ -114,11 +114,16 @@ class ApiService {
   static Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Ajuste/chaves conforme seu projeto real:
-    await prefs.remove('token');
+    // Remover todos os dados de autenticação salvos no login
+    await prefs.remove('access_token');
+    await prefs.remove('refresh_token');
+    await prefs.remove('username');
+    await prefs.remove('user_nome');
     await prefs.remove('user_role');
     await prefs.remove('user');
-    await prefs.remove('refresh_token');
+
+    // Limpar qualquer outra chave de autenticação que possa existir
+    await prefs.remove('token');
   }
 
   static Future<bool> isLoggedIn() async {

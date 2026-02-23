@@ -1,6 +1,10 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:dio/dio.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -394,7 +398,8 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
           if (doc['fatura_url'] != null)
             _linkBtn(Icons.description_outlined, doc['fatura_url']),
           if (doc['file_url'] != null)
-            _linkBtn(Icons.bolt_outlined, doc['file_url']),
+            _downloadBtn(Icons.bolt_outlined, doc['file_url'],
+                doc['conta_contrato'] ?? 'ContaNeo'),
         ],
       ),
     );
@@ -404,8 +409,14 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
     if (url == null) return const SizedBox.shrink();
     return GestureDetector(
       onTap: () async {
-        if (await canLaunchUrl(Uri.parse(url))) {
-          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        // Completar URL se for caminho relativo
+        String fullUrl = url;
+        if (url.startsWith('/')) {
+          fullUrl = 'https://unienergyportal.com$url';
+        }
+        if (await canLaunchUrl(Uri.parse(fullUrl))) {
+          await launchUrl(Uri.parse(fullUrl),
+              mode: LaunchMode.externalApplication);
         }
       },
       child: Container(
@@ -420,6 +431,107 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
     );
   }
 
+  Widget _downloadBtn(IconData icon, String? url, String nomeArquivo) {
+    if (url == null) return const SizedBox.shrink();
+    return GestureDetector(
+      onTap: () => _baixarArquivo(url, nomeArquivo),
+      child: Container(
+        margin: const EdgeInsets.only(left: 4),
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: _bgMid,
+          borderRadius: BorderRadius.circular(4),
+        ),
+        child: Icon(icon, color: _accent, size: 14),
+      ),
+    );
+  }
+
+  Future<void> _baixarArquivo(String url, String nomeArquivo) async {
+    try {
+      if (!mounted) return;
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(color: _accent),
+        ),
+      );
+
+      // Completar URL se for caminho relativo
+      String fullUrl = url;
+      if (url.startsWith('/')) {
+        fullUrl = 'https://unienergyportal.com$url';
+      }
+
+      // Obter token de autenticação
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
+
+      // Obter diretório de downloads
+      Directory? downloadsDir;
+      if (Platform.isAndroid) {
+        downloadsDir = Directory('/storage/emulated/0/Download');
+        if (!await downloadsDir.exists()) {
+          downloadsDir = await getExternalStorageDirectory();
+        }
+      } else {
+        downloadsDir = await getApplicationDocumentsDirectory();
+      }
+
+      if (downloadsDir == null) {
+        throw Exception('Não foi possível acessar o diretório de downloads');
+      }
+
+      // Gerar nome único
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      String finalPath = '${downloadsDir.path}/${nomeArquivo}_$timestamp.pdf';
+      int counter = 1;
+      while (await File(finalPath).exists()) {
+        finalPath =
+            '${downloadsDir.path}/${nomeArquivo}_${timestamp}_($counter).pdf';
+        counter++;
+      }
+
+      // Fazer download com autenticação
+      final dio = Dio();
+      await dio.download(
+        fullUrl,
+        finalPath,
+        options: Options(
+          headers: {
+            if (token != null) 'Authorization': 'Bearer $token',
+          },
+        ),
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            Platform.isAndroid
+                ? 'Arquivo salvo na pasta Downloads'
+                : 'Arquivo salvo com sucesso',
+          ),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao baixar arquivo: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   Widget _buildMesPicker() {
     return GestureDetector(
       onTap: _pickMes,
@@ -428,7 +540,7 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
         decoration: BoxDecoration(
           color: _bgCard,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: _accent.withOpacity(0.4)),
+          border: Border.all(color: _accent.withValues(alpha: 0.4)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -549,7 +661,7 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
         decoration: BoxDecoration(
           color: _bgCard,
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: _accent.withOpacity(0.4)),
+          border: Border.all(color: _accent.withValues(alpha: 0.4)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -619,12 +731,14 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
   }
 
   Widget _buildLegenda() {
-    return Wrap(
-      spacing: 14,
-      runSpacing: 6,
+    // Legenda em linha única fixa (3 itens distribuídos)
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _legItem(_barVS, 'Sem Solar (VS)'),
+        const SizedBox(width: 14),
         _legItem(_barVE, 'Economia (VE)'),
+        const SizedBox(width: 14),
         _legItem(_barVU, 'Unienergy (VU)'),
       ],
     );
@@ -635,14 +749,17 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 10,
-          height: 10,
+          width: 9,
+          height: 9,
           decoration: BoxDecoration(
               color: color, borderRadius: BorderRadius.circular(2)),
         ),
-        const SizedBox(width: 4),
+        const SizedBox(width: 5),
         Text(label,
-            style: const TextStyle(fontSize: 10, color: Color(0xFFb0c4ce))),
+            style: const TextStyle(
+                fontSize: 10,
+                color: Color(0xFFb0c4ce),
+                fontWeight: FontWeight.w500)),
       ],
     );
   }
@@ -663,24 +780,39 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
 
     final mesesOrdenados = dadosAgregados.keys.toList()..sort();
 
+    // Calcular maxY considerando todas as barras (VS, VE, VU)
     double maxY = 0;
     for (final dados in dadosAgregados.values) {
       final vs = dados['vs']!;
+      final ve = dados['ve']!;
+      final vu = dados['vu']!;
       if (vs > maxY) maxY = vs;
+      if (ve > maxY) maxY = ve;
+      if (vu > maxY) maxY = vu;
     }
     if (maxY == 0) maxY = 1;
-    maxY *= 1.25;
+
+    // Altura dinâmica baseada em orientação
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+    final chartH = isLandscape ? 200.0 : 260.0;
+
+    // Largura de barra dinâmica para evitar sobreposição
+    final screenW = MediaQuery.of(context).size.width;
+    final pad = 14.0; // padding estimado
+    final chartW = screenW - (pad * 2) - 20;
+    final barW = ((chartW / 12) / 6.5).clamp(2.5, 6.5);
 
     final groups = mesesOrdenados.asMap().entries.map((e) {
       final dados = dadosAgregados[e.value]!;
       return BarChartGroupData(
         x: e.key,
-        barsSpace: 2,
+        barsSpace: 1,
         barRods: [
           BarChartRodData(
             toY: dados['vs']!,
             color: _barVS,
-            width: 7,
+            width: barW,
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(3),
               topRight: Radius.circular(3),
@@ -689,7 +821,7 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
           BarChartRodData(
             toY: dados['ve']!,
             color: _barVE,
-            width: 7,
+            width: barW,
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(3),
               topRight: Radius.circular(3),
@@ -698,7 +830,7 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
           BarChartRodData(
             toY: dados['vu']!,
             color: _barVU,
-            width: 7,
+            width: barW,
             borderRadius: const BorderRadius.only(
               topLeft: Radius.circular(3),
               topRight: Radius.circular(3),
@@ -727,28 +859,95 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
       return mn[int.parse(p[1]) - 1];
     }).toList();
 
-    return SizedBox(
-      height: 260,
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 14, 12, 10),
+      decoration: BoxDecoration(
+        color: _bgCard,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        height: chartH,
         decoration: BoxDecoration(
-          color: const Color(0xFFE5E5E5),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(6),
         ),
+        padding: const EdgeInsets.fromLTRB(4, 10, 8, 4),
         child: BarChart(
           BarChartData(
             alignment: BarChartAlignment.center,
-            groupsSpace: 10,
+            groupsSpace: 6,
             maxY: maxY,
             barTouchData: BarTouchData(
+              enabled: true,
               touchTooltipData: BarTouchTooltipData(
+                getTooltipColor: (group) => _bgMid.withValues(alpha: 0.95),
+                tooltipPadding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                tooltipMargin: 8,
+                tooltipBorderRadius: BorderRadius.circular(6),
                 getTooltipItem: (group, gi, rod, ri) {
                   final mes = labels[group.x.toInt()];
-                  final names = ['VS', 'VE', 'VU'];
+                  final dados =
+                      dadosAgregados[mesesOrdenados[group.x.toInt()]]!;
+                  final vs = dados['vs']!;
+                  final ve = dados['ve']!;
+                  final vu = dados['vu']!;
+
+                  // Calcula percentual de economia (VE em relação a VS)
+                  final economiaPerc = vs > 0 ? ((ve / vs) * 100) : 0.0;
+
                   return BarTooltipItem(
-                    '$mes — ${names[ri]}\n${_fmtR(rod.toY)}',
+                    '$mes\n',
                     const TextStyle(
-                        color: Colors.white, fontSize: 11, height: 1.5),
+                        color: Colors.white,
+                        fontSize: 10,
+                        height: 1.4,
+                        fontWeight: FontWeight.w600),
+                    children: [
+                      const TextSpan(
+                        text: '● ',
+                        style: TextStyle(
+                            color: _barVS,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12),
+                      ),
+                      const TextSpan(text: 'Sem Solar: '),
+                      TextSpan(text: '${_fmtR(vs)}\n'),
+                      const TextSpan(
+                        text: '● ',
+                        style: TextStyle(
+                            color: _barVE,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12),
+                      ),
+                      const TextSpan(text: 'Economia: '),
+                      TextSpan(text: '${_fmtR(ve)}\n'),
+                      const TextSpan(
+                        text: '● ',
+                        style: TextStyle(
+                            color: _barVU,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12),
+                      ),
+                      const TextSpan(text: 'Unienergy: '),
+                      TextSpan(text: '${_fmtR(vu)}\n'),
+                      const TextSpan(
+                        text: 'Economia: ',
+                        style: TextStyle(color: Color(0xFFb0c4ce)),
+                      ),
+                      TextSpan(
+                        text: '${economiaPerc.toStringAsFixed(1)}%',
+                        style: const TextStyle(
+                            color: _accent, fontWeight: FontWeight.bold),
+                      ),
+                    ],
                   );
                 },
               ),
@@ -762,10 +961,12 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
                     final i = v.toInt();
                     if (i < 0 || i >= labels.length) return const Text('');
                     return Padding(
-                      padding: const EdgeInsets.only(top: 3),
+                      padding: const EdgeInsets.only(top: 6),
                       child: Text(labels[i],
                           style: const TextStyle(
-                              fontSize: 8, color: Color(0xFF374151))),
+                              fontSize: 9,
+                              color: Color(0xFF374151),
+                              fontWeight: FontWeight.w500)),
                     );
                   },
                 ),
@@ -774,10 +975,17 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
                 sideTitles: SideTitles(
                   showTitles: true,
                   reservedSize: _leftR,
-                  getTitlesWidget: (v, m) => Text(
-                    _shortR(v),
-                    style:
-                        const TextStyle(fontSize: 8, color: Color(0xFF6b7280)),
+                  interval: maxY / 5,
+                  getTitlesWidget: (v, m) => Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Text(
+                      _shortR(v),
+                      style: const TextStyle(
+                          fontSize: 9,
+                          color: Color(0xFF6b7280),
+                          fontWeight: FontWeight.w500),
+                      textAlign: TextAlign.right,
+                    ),
                   ),
                 ),
               ),
@@ -786,7 +994,15 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
               topTitles:
                   const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             ),
-            gridData: const FlGridData(show: false),
+            gridData: FlGridData(
+              show: true,
+              drawVerticalLine: false,
+              horizontalInterval: maxY / 5,
+              getDrawingHorizontalLine: (value) => FlLine(
+                color: const Color(0xFFd1d5db).withValues(alpha: 0.5),
+                strokeWidth: 1,
+              ),
+            ),
             borderData: FlBorderData(show: false),
             barGroups: groups,
           ),
@@ -807,10 +1023,10 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
       decoration: BoxDecoration(
         color: _bgMid,
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: _accent.withOpacity(0.25)),
+        border: Border.all(color: _accent.withValues(alpha: 0.25)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.2),
+            color: Colors.black.withValues(alpha: 0.2),
             blurRadius: 10,
             offset: const Offset(0, 3),
           ),
