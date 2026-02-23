@@ -698,7 +698,7 @@ class ClienteContasTabState extends State<ClienteContasTab> {
                           if (temUni)
                             Expanded(
                                 child: _docBtn(
-                              icon: Icons.open_in_new,
+                              icon: Icons.payment,
                               label: 'Asaas',
                               url: conta['fatura_unienergy_url'],
                               color: const Color(0xFF10b981),

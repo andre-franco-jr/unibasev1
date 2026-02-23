@@ -16,9 +16,9 @@ const _bgCard = Color(0xFF004D66);
 const _accent = Color(0xFFEAC248);
 
 // Cores das 3 barras do gráfico
-const _barVS = Color(0xFF10b981); // VS → verde
+const _barVS = Color(0xFF148bad); // VS → azul-água
 const _barVE = Color(0xFFEAC248); // VE → dourado
-const _barVU = Color(0xFF148bad); // VU → azul-água
+const _barVU = Color(0xFF10b981); // VU → verde
 
 const double _leftR = 48.0;
 const double _rightR = 8.0;
@@ -84,7 +84,12 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
     try {
       final r = await ApiService.clienteContasDisponiveis();
       if (!mounted) return;
-      setState(() => _contas = List<Map<String, dynamic>>.from(r));
+      setState(() {
+        _contas = List<Map<String, dynamic>>.from(r);
+        // Selecionar todas as contas por padrão
+        _contasSelecionadas =
+            _contas.map((c) => c['conta_contrato'] as String).toSet();
+      });
       await _loadGrafico();
     } catch (_) {}
   }
@@ -92,9 +97,7 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
   Future<void> _loadGrafico() async {
     setState(() => _loadingGrafico = true);
     try {
-      final contas = _contasSelecionadas.isEmpty
-          ? _contas.map((c) => c['conta_contrato'] as String).toList()
-          : _contasSelecionadas.toList();
+      final contas = _contasSelecionadas.toList();
       final r = await ApiService.clienteDashboardGrafico(contas: contas);
       if (!mounted) return;
       setState(() {
@@ -416,7 +419,7 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
             ),
           if (doc['fatura_unienergy_url'] != null)
             _docBtn(
-              icon: Icons.open_in_new,
+              icon: Icons.payment,
               label: 'Asaas',
               url: doc['fatura_unienergy_url'],
               color: const Color(0xFF10b981),
@@ -858,11 +861,9 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
             const Icon(Icons.filter_list, size: 12, color: _accent),
             const SizedBox(width: 4),
             Text(
-              _contasSelecionadas.isEmpty
+              _contasSelecionadas.length == _contas.length
                   ? 'Todas'
-                  : _contasSelecionadas.length == _contas.length
-                      ? 'Todas'
-                      : '${_contasSelecionadas.length} conta${_contasSelecionadas.length > 1 ? 's' : ''}',
+                  : '${_contasSelecionadas.length} conta${_contasSelecionadas.length > 1 ? 's' : ''}',
               style: const TextStyle(fontSize: 10, color: Colors.white),
             ),
             const SizedBox(width: 2),
