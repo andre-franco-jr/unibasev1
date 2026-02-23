@@ -412,7 +412,7 @@ class _DashboardTabState extends State<DashboardTab> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                c.value,
+                c.unit.isNotEmpty ? '${c.value} ${c.unit}' : c.value,
                 style: TextStyle(
                   fontSize: 15,
                   fontWeight: FontWeight.w700,
@@ -422,9 +422,9 @@ class _DashboardTabState extends State<DashboardTab> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
-              if (c.sub != null || c.unit.isNotEmpty)
+              if (c.sub != null)
                 Text(
-                  c.sub ?? c.unit,
+                  c.sub!,
                   style: const TextStyle(
                     fontSize: 9,
                     color: const Color(0xFFb0c4ce),
