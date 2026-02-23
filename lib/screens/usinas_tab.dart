@@ -1107,7 +1107,7 @@ class UsinasTabState extends State<UsinasTab> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFE0E0E0),
         borderRadius: BorderRadius.circular(6),
       ),
       padding: const EdgeInsets.fromLTRB(4, 10, 8, 4),
@@ -1139,12 +1139,7 @@ class UsinasTabState extends State<UsinasTab> {
             ),
           ),
           gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            getDrawingHorizontalLine: (_) => const FlLine(
-              color: Color(0xFFe5e7eb),
-              strokeWidth: 1,
-            ),
+            show: false,
           ),
           borderData: FlBorderData(show: false),
           titlesData: FlTitlesData(
@@ -1523,13 +1518,7 @@ class UsinasTabState extends State<UsinasTab> {
           ),
         ),
         gridData: FlGridData(
-          show: true,
-          drawVerticalLine: false,
-          horizontalInterval: maxY / 6,
-          getDrawingHorizontalLine: (_) => const FlLine(
-            color: Color(0xFFe5e7eb),
-            strokeWidth: 1,
-          ),
+          show: false,
         ),
         borderData: FlBorderData(show: false),
         barGroups: groups,
@@ -1580,7 +1569,7 @@ class UsinasTabState extends State<UsinasTab> {
       return ClipRRect(
         borderRadius: BorderRadius.circular(6),
         child: Container(
-          color: Colors.white,
+          color: const Color(0xFFE0E0E0),
           child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: SizedBox(
@@ -1594,7 +1583,7 @@ class UsinasTabState extends State<UsinasTab> {
 
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: const Color(0xFFE0E0E0),
         borderRadius: BorderRadius.circular(6),
       ),
       child: ClipRRect(

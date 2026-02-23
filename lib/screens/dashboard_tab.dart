@@ -529,7 +529,7 @@ class _DashboardTabState extends State<DashboardTab> {
           Container(
             height: chartH,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: const Color(0xFFE0E0E0),
               borderRadius: BorderRadius.circular(6),
             ),
             padding: const EdgeInsets.fromLTRB(4, 10, 8, 4),
@@ -679,12 +679,7 @@ class _DashboardTabState extends State<DashboardTab> {
                       sideTitles: SideTitles(showTitles: false)),
                 ),
                 gridData: FlGridData(
-                  show: true,
-                  drawVerticalLine: false,
-                  getDrawingHorizontalLine: (_) => const FlLine(
-                    color: Color(0xFFe5e7eb),
-                    strokeWidth: 1,
-                  ),
+                  show: false,
                 ),
                 borderData: FlBorderData(show: false),
                 barGroups: _graficoData.asMap().entries.map((e) {

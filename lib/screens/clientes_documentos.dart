@@ -20,6 +20,7 @@ class ClienteDocumentosTab extends StatefulWidget {
 class ClienteDocumentosTabState extends State<ClienteDocumentosTab> {
   List<Map<String, dynamic>> _pastas = [];
   Map<String, List<Map<String, dynamic>>> _arquivosPorPasta = {};
+  final Set<String> _pastasExpandidas = {};
   bool _loading = true;
 
   @override
@@ -44,8 +45,16 @@ class ClienteDocumentosTabState extends State<ClienteDocumentosTab> {
       final arquivosRaiz =
           await ApiService.clienteDocumentosArquivos(pasta: null);
       if (arquivosRaiz.isNotEmpty) {
-        arquivosPorPasta['_raiz'] =
-            List<Map<String, dynamic>>.from(arquivosRaiz);
+        // Filtrar arquivos .folder
+        final arquivosFiltrados = arquivosRaiz
+            .where((arq) =>
+                arq['file_name'] != '.folder' &&
+                arq['extensao']?.toString().toLowerCase() != 'folder')
+            .toList();
+        if (arquivosFiltrados.isNotEmpty) {
+          arquivosPorPasta['_raiz'] =
+              List<Map<String, dynamic>>.from(arquivosFiltrados);
+        }
       }
 
       // Carregar arquivos de cada pasta
@@ -55,8 +64,16 @@ class ClienteDocumentosTabState extends State<ClienteDocumentosTab> {
           final arquivos =
               await ApiService.clienteDocumentosArquivos(pasta: nomePasta);
           if (arquivos.isNotEmpty) {
-            arquivosPorPasta[nomePasta] =
-                List<Map<String, dynamic>>.from(arquivos);
+            // Filtrar arquivos .folder
+            final arquivosFiltrados = arquivos
+                .where((arq) =>
+                    arq['file_name'] != '.folder' &&
+                    arq['extensao']?.toString().toLowerCase() != 'folder')
+                .toList();
+            if (arquivosFiltrados.isNotEmpty) {
+              arquivosPorPasta[nomePasta] =
+                  List<Map<String, dynamic>>.from(arquivosFiltrados);
+            }
           }
         }
       }
@@ -128,6 +145,8 @@ class ClienteDocumentosTabState extends State<ClienteDocumentosTab> {
 
   Widget _buildSecaoPasta(
       String nomePasta, List<Map<String, dynamic>> arquivos, IconData icon) {
+    final isExpanded = _pastasExpandidas.contains(nomePasta);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
       decoration: BoxDecoration(
@@ -138,61 +157,81 @@ class ClienteDocumentosTabState extends State<ClienteDocumentosTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cabeçalho da pasta
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: _bgMid,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(12),
-                topRight: Radius.circular(12),
+          // Cabeçalho da pasta (clicável para expandir/colapsar)
+          InkWell(
+            onTap: () {
+              setState(() {
+                if (isExpanded) {
+                  _pastasExpandidas.remove(nomePasta);
+                } else {
+                  _pastasExpandidas.add(nomePasta);
+                }
+              });
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: _bgMid,
+                borderRadius: BorderRadius.circular(12),
+                border: isExpanded
+                    ? const Border(
+                        bottom: BorderSide(color: _accent, width: 2),
+                      )
+                    : null,
               ),
-              border: const Border(
-                bottom: BorderSide(color: _accent, width: 2),
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(icon, color: _accent, size: 18),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    nomePasta,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
+              child: Row(
+                children: [
+                  Icon(icon, color: _accent, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      nomePasta,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
-                ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: _accent.withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${arquivos.length} ${arquivos.length == 1 ? 'arquivo' : 'arquivos'}',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: _accent,
-                      fontWeight: FontWeight.w600,
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _accent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${arquivos.length} ${arquivos.length == 1 ? 'arquivo' : 'arquivos'}',
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: _accent,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_up
+                        : Icons.keyboard_arrow_down,
+                    color: _accent,
+                    size: 20,
+                  ),
+                ],
+              ),
             ),
           ),
-          // Lista de arquivos
-          Padding(
-            padding: const EdgeInsets.all(10),
-            child: Column(
-              children: arquivos
-                  .map((arq) => _buildArquivoCard(arq, nomePasta))
-                  .toList(),
+          // Lista de arquivos (visível apenas quando expandido)
+          if (isExpanded)
+            Padding(
+              padding: const EdgeInsets.all(10),
+              child: Column(
+                children: arquivos
+                    .map((arq) => _buildArquivoCard(arq, nomePasta))
+                    .toList(),
+              ),
             ),
-          ),
         ],
       ),
     );

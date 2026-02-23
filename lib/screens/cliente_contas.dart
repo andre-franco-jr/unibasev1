@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../services/api_service.dart';
 
 const _bgDark = Color(0xFF001f2e);
@@ -22,11 +23,11 @@ class ClienteContasTabState extends State<ClienteContasTab> {
   List<Map<String, dynamic>> _contas = [];
   List<Map<String, dynamic>> _filtradas = [];
   bool _loading = true;
-  final Set<int> _expandidos = {}; // Controla quais cards estão expandidos
+  String? _erro;
+  final Set<int> _expandidos = {};
 
-  // Filtros
   String _busca = '';
-  String? _mesAtivo; // ref_mes_ano no formato "MM/YYYY"
+  String? _mesAtivo;
   DateTime? _dataSelecionada;
   final _buscaCtrl = TextEditingController();
 
@@ -45,7 +46,10 @@ class ClienteContasTabState extends State<ClienteContasTab> {
   Future<void> refresh() => _loadContas();
 
   Future<void> _loadContas() async {
-    setState(() => _loading = true);
+    setState(() {
+      _loading = true;
+      _erro = null;
+    });
     try {
       final r = await ApiService.clienteContasNeoenergia();
       if (!mounted) return;
@@ -54,8 +58,12 @@ class ClienteContasTabState extends State<ClienteContasTab> {
         _loading = false;
       });
       _aplicarFiltro();
-    } catch (_) {
-      if (mounted) setState(() => _loading = false);
+    } catch (e) {
+      if (mounted)
+        setState(() {
+          _loading = false;
+          _erro = e.toString();
+        });
     }
   }
 
@@ -85,43 +93,266 @@ class ClienteContasTabState extends State<ClienteContasTab> {
   }
 
   String _formatarData(String? dataStr) {
-    if (dataStr == null || dataStr.isEmpty) return '';
+    if (dataStr == null || dataStr.isEmpty || dataStr.contains('%')) return '';
+    final s = dataStr.trim();
+    try {
+      if (RegExp(r'^\d{2}/\d{2}/\d{4}$').hasMatch(s)) return s;
+      if (s.contains('T'))
+        return DateFormat('dd/MM/yyyy').format(DateTime.parse(s));
+      if (RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(s))
+        return DateFormat('dd/MM/yyyy').format(DateTime.parse(s));
+      return s;
+    } catch (_) {
+      return s;
+    }
+  }
 
-    final dataLimpa = dataStr.trim();
+  String _fullUrl(String url) =>
+      url.startsWith('/') ? 'https://unienergyportal.com$url' : url;
 
-    // Se for um placeholder, não exibe
-    if (dataLimpa.contains('%')) return '';
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MODAL DE VISUALIZAÇÃO DE DOCUMENTO
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  void _abrirDocumento({
+    required String label,
+    required String url,
+    required Color color,
+    required IconData icon,
+  }) {
+    final fullUrl = _fullUrl(url);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.42,
+        decoration: const BoxDecoration(
+          color: _bgMid,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          children: [
+            // Handle
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+
+            // Ícone grande
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                shape: BoxShape.circle,
+                border: Border.all(color: color.withOpacity(0.4), width: 2),
+              ),
+              child: Icon(icon, color: color, size: 34),
+            ),
+            const SizedBox(height: 14),
+
+            // Label do documento
+            Text(
+              label,
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white),
+            ),
+            const SizedBox(height: 6),
+
+            // URL resumida
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                fullUrl.length > 60
+                    ? '...${fullUrl.substring(fullUrl.length - 60)}'
+                    : fullUrl,
+                style: const TextStyle(fontSize: 10, color: Color(0xFF7da5b5)),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+
+            const Spacer(),
+            Divider(color: Colors.white.withOpacity(0.06), height: 1),
+
+            // Botões
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+              child: Row(
+                children: [
+                  // Visualizar
+                  Expanded(
+                    child: _modalBtn(
+                      icon: Icons.visibility_outlined,
+                      label: 'Visualizar',
+                      color: color,
+                      filled: true,
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        await _visualizarNoNavegador(fullUrl);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Baixar
+                  Expanded(
+                    child: _modalBtn(
+                      icon: Icons.download_outlined,
+                      label: 'Baixar PDF',
+                      color: color,
+                      filled: false,
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        final nome =
+                            '${label.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}';
+                        await _baixarArquivo(fullUrl, nome);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _modalBtn({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required bool filled,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        decoration: BoxDecoration(
+          color: filled ? color : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color, width: filled ? 0 : 1.5),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: filled ? _bgDark : color, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: filled ? _bgDark : color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _visualizarNoNavegador(String url) async {
+    // Para PDFs do Asaas (já são URLs diretas), abre direto.
+    // Para PDFs internos, usa o Google Docs Viewer como fallback
+    // caso o dispositivo não tenha app de PDF.
+    String targetUrl = url;
+
+    // Se for um PDF interno (não Asaas), tenta abrir via Google Docs Viewer
+    if (!url.contains('asaas.com')) {
+      targetUrl =
+          'https://docs.google.com/viewer?url=${Uri.encodeComponent(url)}';
+    }
+
+    final uri = Uri.parse(targetUrl);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        // Fallback: tenta URL original
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Não foi possível abrir: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ));
+      }
+    }
+  }
+
+  // ── DOWNLOAD ─────────────────────────────────────────────────────────────────
+
+  Future<void> _baixarArquivo(String url, String nomeArquivo) async {
+    BuildContext? dialogCtx;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        dialogCtx = ctx;
+        return const Center(child: CircularProgressIndicator(color: _accent));
+      },
+    );
 
     try {
-      DateTime data;
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('access_token');
 
-      // ISO 8601: 2024-03-15T00:00:00.000Z ou 2024-03-15T00:00:00
-      if (dataLimpa.contains('T')) {
-        data = DateTime.parse(dataLimpa);
+      Directory? dir;
+      if (Platform.isAndroid) {
+        dir = Directory('/storage/emulated/0/Download');
+        if (!await dir.exists()) dir = await getExternalStorageDirectory();
+      } else {
+        dir = await getApplicationDocumentsDirectory();
       }
-      // yyyy-MM-dd
-      else if (RegExp(r'^\d{4}-\d{2}-\d{2}').hasMatch(dataLimpa)) {
-        data = DateTime.parse(dataLimpa);
-      }
-      // dd/MM/yyyy - já está formatado
-      else if (RegExp(r'^\d{2}/\d{2}/\d{4}').hasMatch(dataLimpa)) {
-        return dataLimpa;
-      }
-      // MM/dd/yyyy
-      else if (RegExp(r'^\d{2}/\d{2}/\d{4}').hasMatch(dataLimpa)) {
-        final partes = dataLimpa.split('/');
-        data = DateTime(
-            int.parse(partes[2]), int.parse(partes[0]), int.parse(partes[1]));
-      }
-      // Se não reconhecer, retorna o original (melhor que nada)
-      else {
-        return dataLimpa;
+      if (dir == null) throw Exception('Diretório de downloads indisponível');
+
+      String finalPath = '${dir.path}/$nomeArquivo.pdf';
+      int counter = 1;
+      while (await File(finalPath).exists()) {
+        finalPath = '${dir.path}/$nomeArquivo($counter).pdf';
+        counter++;
       }
 
-      return DateFormat('dd/MM/yyyy').format(data);
+      await Dio().download(
+        url,
+        finalPath,
+        options: Options(headers: {
+          if (token != null) 'Authorization': 'Bearer $token',
+        }),
+      );
+
+      if (!mounted) return;
+      if (dialogCtx != null) Navigator.pop(dialogCtx!);
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(Platform.isAndroid
+            ? 'Salvo na pasta Downloads'
+            : 'Arquivo salvo com sucesso'),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 3),
+      ));
     } catch (e) {
-      // Em caso de erro, mostra o valor original
-      return dataLimpa;
+      if (!mounted) return;
+      if (dialogCtx != null) Navigator.pop(dialogCtx!);
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Erro ao baixar: ${e.toString()}'),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 4),
+      ));
     }
   }
 
@@ -133,25 +364,64 @@ class ClienteContasTabState extends State<ClienteContasTab> {
   Widget build(BuildContext context) {
     return Container(
       color: _bgDark,
-      child: Column(
-        children: [
-          _buildFiltros(),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator(color: _accent))
-                : _filtradas.isEmpty
-                    ? const Center(
-                        child: Text('Nenhuma conta encontrada',
-                            style:
-                                TextStyle(color: Colors.white38, fontSize: 13)))
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(12, 8, 12, 24),
-                        itemCount: _filtradas.length,
-                        itemBuilder: (_, i) =>
-                            _buildContaCard(_filtradas[i], i),
-                      ),
-          ),
-        ],
+      child: _loading
+          ? const Center(child: CircularProgressIndicator(color: _accent))
+          : _erro != null
+              ? _buildErro()
+              : _filtradas.isEmpty
+                  ? Column(
+                      children: [
+                        _buildFiltros(),
+                        const Expanded(
+                          child: Center(
+                            child: Text('Nenhuma conta encontrada',
+                                style: TextStyle(
+                                    color: Colors.white38, fontSize: 13)),
+                          ),
+                        ),
+                      ],
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(0),
+                      itemCount: _filtradas.length + 1,
+                      itemBuilder: (_, i) {
+                        if (i == 0) return _buildFiltros();
+                        final isLast = i == _filtradas.length;
+                        return Padding(
+                          padding:
+                              EdgeInsets.fromLTRB(12, 8, 12, isLast ? 24 : 0),
+                          child: _buildContaCard(_filtradas[i - 1], i - 1),
+                        );
+                      },
+                    ),
+    );
+  }
+
+  Widget _buildErro() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.redAccent, size: 48),
+            const SizedBox(height: 16),
+            Text(_erro ?? 'Erro desconhecido',
+                style: const TextStyle(color: Colors.white54, fontSize: 13),
+                textAlign: TextAlign.center),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _accent,
+                foregroundColor: _bgDark,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: _loadContas,
+              child: const Text('Tentar novamente'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -164,7 +434,6 @@ class ClienteContasTabState extends State<ClienteContasTab> {
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Column(
         children: [
-          // Barra de busca
           Container(
             height: 38,
             decoration: BoxDecoration(
@@ -189,13 +458,10 @@ class ClienteContasTabState extends State<ClienteContasTab> {
             ),
           ),
           const SizedBox(height: 8),
-          // Seletor de calendário
-          if (_mesAtivo == null)
-            _buildSeletorCalendario()
-          else
-            Row(
-              children: [
-                Expanded(child: _buildSeletorCalendario()),
+          Row(
+            children: [
+              Expanded(child: _buildSeletorCalendario()),
+              if (_mesAtivo != null) ...[
                 const SizedBox(width: 8),
                 GestureDetector(
                   onTap: () {
@@ -217,50 +483,44 @@ class ClienteContasTabState extends State<ClienteContasTab> {
                   ),
                 ),
               ],
-            ),
+            ],
+          ),
         ],
       ),
     );
   }
 
   Widget _buildSeletorCalendario() {
+    final ativo = _mesAtivo != null;
     return GestureDetector(
       onTap: _abrirCalendario,
       child: Container(
         height: 38,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: _mesAtivo != null ? _accent.withOpacity(0.15) : _bgCard,
+          color: ativo ? _accent.withOpacity(0.15) : _bgCard,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: _mesAtivo != null ? _accent : _accent.withOpacity(0.3),
-            width: _mesAtivo != null ? 2 : 1,
-          ),
+              color: ativo ? _accent : _accent.withOpacity(0.3),
+              width: ativo ? 2 : 1),
         ),
         child: Row(
           children: [
-            Icon(
-              Icons.calendar_month,
-              color: _mesAtivo != null ? _accent : Colors.white70,
-              size: 18,
-            ),
+            Icon(Icons.calendar_month,
+                color: ativo ? _accent : Colors.white70, size: 18),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
                 _mesAtivo ?? 'Selecionar mês',
                 style: TextStyle(
                   fontSize: 13,
-                  fontWeight:
-                      _mesAtivo != null ? FontWeight.w600 : FontWeight.normal,
-                  color: _mesAtivo != null ? _accent : Colors.white70,
+                  fontWeight: ativo ? FontWeight.w600 : FontWeight.normal,
+                  color: ativo ? _accent : Colors.white70,
                 ),
               ),
             ),
-            Icon(
-              Icons.arrow_drop_down,
-              color: _mesAtivo != null ? _accent : Colors.white70,
-              size: 20,
-            ),
+            Icon(Icons.arrow_drop_down,
+                color: ativo ? _accent : Colors.white70, size: 20),
           ],
         ),
       ),
@@ -270,19 +530,14 @@ class ClienteContasTabState extends State<ClienteContasTab> {
   Future<void> _abrirCalendario() async {
     final resultado = await showDialog<Map<String, int>>(
       context: context,
-      builder: (context) => _SeletorMesAno(
-        dataSelecionada: _dataSelecionada,
-      ),
+      builder: (_) => _SeletorMesAno(dataSelecionada: _dataSelecionada),
     );
-
     if (resultado != null) {
       final mes = resultado['mes']!;
       final ano = resultado['ano']!;
-      final mesFormatado = '${mes.toString().padLeft(2, '0')}/$ano';
-
       setState(() {
         _dataSelecionada = DateTime(ano, mes);
-        _mesAtivo = mesFormatado;
+        _mesAtivo = '${mes.toString().padLeft(2, '0')}/$ano';
       });
       _aplicarFiltro();
     }
@@ -306,15 +561,14 @@ class ClienteContasTabState extends State<ClienteContasTab> {
       ),
       child: Column(
         children: [
-          // Cabeçalho (sempre visível e clicável)
+          // Cabeçalho
           InkWell(
             onTap: () {
               setState(() {
-                if (isExpanded) {
+                if (isExpanded)
                   _expandidos.remove(index);
-                } else {
+                else
                   _expandidos.add(index);
-                }
               });
             },
             borderRadius: BorderRadius.vertical(
@@ -344,22 +598,18 @@ class ClienteContasTabState extends State<ClienteContasTab> {
                               conta['nome_cliente'] ??
                               '—',
                           style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
-                          ),
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
-                        Text(
-                          'Conta: ${conta['codigo_cliente'] ?? '—'}',
-                          style: const TextStyle(
-                              fontSize: 10, color: Color(0xFFb0c4ce)),
-                        ),
+                        Text('Conta: ${conta['codigo_cliente'] ?? '—'}',
+                            style: const TextStyle(
+                                fontSize: 10, color: Color(0xFFb0c4ce))),
                       ],
                     ),
                   ),
-                  // Badge mês
                   Container(
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -368,29 +618,22 @@ class ClienteContasTabState extends State<ClienteContasTab> {
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: _accent.withOpacity(0.5)),
                     ),
-                    child: Text(
-                      conta['ref_mes_ano'] ?? '',
-                      style: const TextStyle(
-                          fontSize: 10,
-                          color: _accent,
-                          fontWeight: FontWeight.w600),
-                    ),
+                    child: Text(conta['ref_mes_ano'] ?? '',
+                        style: const TextStyle(
+                            fontSize: 10,
+                            color: _accent,
+                            fontWeight: FontWeight.w600)),
                   ),
                   const SizedBox(width: 8),
-                  // Ícone de expansão
-                  Icon(
-                    isExpanded ? Icons.expand_less : Icons.expand_more,
-                    color: _accent,
-                    size: 20,
-                  ),
+                  Icon(isExpanded ? Icons.expand_less : Icons.expand_more,
+                      color: _accent, size: 20),
                 ],
               ),
             ),
           ),
 
-          // Conteúdo expansível (valores e botões)
+          // Conteúdo expansível
           if (isExpanded) ...[
-            // Valores
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
               child: Row(
@@ -404,76 +647,65 @@ class ClienteContasTabState extends State<ClienteContasTab> {
               ),
             ),
 
-            // Botões de download em grid 2x2
+            // Botões de documento
             if (temBoleto || temFatura || temNeo || temUni)
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                 child: Column(
                   children: [
-                    // Primeira linha (2 botões)
-                    Row(
-                      children: [
-                        if (temBoleto)
-                          Expanded(
-                            child: _downloadBtn(
-                              Icons.barcode_reader,
-                              'Boleto',
-                              conta['bank_slip_url'],
-                              Colors.orange,
-                            ),
-                          ),
-                        if (temBoleto && (temFatura || temNeo || temUni))
-                          const SizedBox(width: 6),
-                        if (temFatura)
-                          Expanded(
-                            child: _downloadBtn(
-                              Icons.description_outlined,
-                              'Fatura Uni',
-                              conta['fatura_url'],
-                              _accent,
-                            ),
-                          ),
-                        // Se só tem Boleto, preenche o espaço
-                        if (temBoleto && !temFatura && !temNeo && !temUni)
-                          const Expanded(child: SizedBox()),
-                        // Se não tem Boleto mas tem Fatura, e não tem Neo nem Uni
-                        if (!temBoleto && temFatura && !temNeo && !temUni)
-                          const Expanded(child: SizedBox()),
-                      ],
-                    ),
-                    // Espaçamento entre linhas
-                    if ((temBoleto || temFatura) && (temNeo || temUni))
-                      const SizedBox(height: 6),
-                    // Segunda linha (2 botões)
-                    if (temNeo || temUni)
+                    // Primeira linha: Conta Neo + Fatura Unienergy
+                    if (temNeo || temFatura)
                       Row(
                         children: [
                           if (temNeo)
                             Expanded(
-                              child: _downloadBtn(
-                                Icons.bolt_outlined,
-                                'Conta Neo',
-                                conta['file_url'],
-                                const Color(0xFF148bad),
-                              ),
-                            ),
-                          if (temNeo && temUni) const SizedBox(width: 6),
+                                child: _docBtn(
+                              icon: Icons.bolt_outlined,
+                              label: 'Conta Neo',
+                              url: conta['file_url'],
+                              color: _accent,
+                            )),
+                          if (temNeo && temFatura) const SizedBox(width: 6),
+                          if (temFatura)
+                            Expanded(
+                                child: _docBtn(
+                              icon: Icons.description_outlined,
+                              label: 'Fatura Uni',
+                              url: conta['fatura_url'],
+                              color: const Color(0xFFFF8C42),
+                            )),
+                          if (temNeo && !temFatura)
+                            const Expanded(child: SizedBox()),
+                          if (!temNeo && temFatura)
+                            const Expanded(child: SizedBox()),
+                        ],
+                      ),
+                    if ((temNeo || temFatura) && (temBoleto || temUni))
+                      const SizedBox(height: 6),
+                    // Segunda linha: Boleto + Asaas
+                    if (temBoleto || temUni)
+                      Row(
+                        children: [
+                          if (temBoleto)
+                            Expanded(
+                                child: _docBtn(
+                              icon: Icons.qr_code_2_outlined,
+                              label: 'Boleto',
+                              url: conta['bank_slip_url'],
+                              color: const Color(0xFF148bad),
+                            )),
+                          if (temBoleto && temUni) const SizedBox(width: 6),
                           if (temUni)
                             Expanded(
-                              child: _downloadBtn(
-                                Icons.picture_as_pdf_outlined,
-                                'PDF Uni',
-                                conta['fatura_unienergy_url'] != null
-                                    ? 'https://unienergyportal.com${conta['fatura_unienergy_url']}'
-                                    : null,
-                                const Color(0xFF10b981),
-                              ),
-                            ),
-                          // Se só tem Neo, preenche o espaço
-                          if (temNeo && !temUni)
+                                child: _docBtn(
+                              icon: Icons.open_in_new,
+                              label: 'Asaas',
+                              url: conta['fatura_unienergy_url'],
+                              color: const Color(0xFF10b981),
+                            )),
+                          if (temBoleto && !temUni)
                             const Expanded(child: SizedBox()),
-                          // Se só tem Uni (sem Neo)
-                          if (!temNeo && temUni)
+                          if (!temBoleto && temUni)
                             const Expanded(child: SizedBox()),
                         ],
                       ),
@@ -486,149 +718,21 @@ class ClienteContasTabState extends State<ClienteContasTab> {
     );
   }
 
-  Widget _valorItem(String label, double valor, String? vencimento) {
-    final dataFormatada = _formatarData(vencimento);
-    final dataExibir =
-        dataFormatada.isNotEmpty ? dataFormatada : (vencimento ?? '');
-
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-          color: _bgCard,
-          borderRadius: BorderRadius.circular(7),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label,
-                style: const TextStyle(fontSize: 9, color: Color(0xFFb0c4ce))),
-            const SizedBox(height: 3),
-            Text(
-              valor > 0 ? 'R\$ ${valor.toStringAsFixed(2)}' : '—',
-              style: const TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: Colors.white,
-              ),
-            ),
-            if (dataExibir.isNotEmpty && !dataExibir.contains('%'))
-              Text(
-                'Venc: $dataExibir',
-                style: const TextStyle(fontSize: 9, color: Color(0xFFb0c4ce)),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Future<void> _baixarArquivo(String url, String nomeArquivo) async {
-    try {
-      // Mostrar diálogo de carregamento
-      if (!mounted) return;
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(color: _accent),
-        ),
-      );
-
-      // Completar URL se for caminho relativo
-      String fullUrl = url;
-      if (url.startsWith('/')) {
-        fullUrl = 'https://unienergyportal.com$url';
-      }
-
-      // Obter token de autenticação
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('access_token');
-
-      // Obter diretório de downloads
-      Directory? downloadsDir;
-      if (Platform.isAndroid) {
-        downloadsDir = Directory('/storage/emulated/0/Download');
-        if (!await downloadsDir.exists()) {
-          downloadsDir = await getExternalStorageDirectory();
-        }
-      } else {
-        downloadsDir = await getApplicationDocumentsDirectory();
-      }
-
-      if (downloadsDir == null) {
-        throw Exception('Não foi possível acessar o diretório de downloads');
-      }
-
-      // Gerar nome único se o arquivo já existir
-      String finalPath = '${downloadsDir.path}/$nomeArquivo.pdf';
-      int counter = 1;
-      while (await File(finalPath).exists()) {
-        finalPath = '${downloadsDir.path}/$nomeArquivo($counter).pdf';
-        counter++;
-      }
-
-      // Fazer download com autenticação
-      final dio = Dio();
-      await dio.download(
-        fullUrl,
-        finalPath,
-        options: Options(
-          headers: {
-            if (token != null) 'Authorization': 'Bearer $token',
-          },
-        ),
-        onReceiveProgress: (received, total) {
-          if (total != -1) {
-            final progress = (received / total * 100).toStringAsFixed(0);
-            debugPrint('Download: $progress%');
-          }
-        },
-      );
-
-      if (!mounted) return;
-      Navigator.pop(context); // Fechar diálogo de loading
-
-      // Mostrar sucesso com caminho simplificado
-      final String mensagem = Platform.isAndroid
-          ? 'Arquivo salvo na pasta Downloads'
-          : 'Arquivo salvo com sucesso';
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(mensagem),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 3),
-          action: SnackBarAction(
-            label: 'OK',
-            textColor: Colors.white,
-            onPressed: () {},
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context); // Fechar diálogo de loading
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Erro ao baixar arquivo: ${e.toString()}'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        ),
-      );
-    }
-  }
-
-  Widget _downloadBtn(IconData icon, String label, String? url, Color color) {
+  /// Botão que abre o modal de documento (substituiu o _downloadBtn direto)
+  Widget _docBtn({
+    required IconData icon,
+    required String label,
+    required String? url,
+    required Color color,
+  }) {
     if (url == null) return const SizedBox.shrink();
     return GestureDetector(
-      onTap: () async {
-        // Gerar nome do arquivo baseado no label e timestamp
-        final timestamp = DateTime.now().millisecondsSinceEpoch;
-        final nomeArquivo = '${label.replaceAll(' ', '_')}_$timestamp';
-        await _baixarArquivo(url, nomeArquivo);
-      },
+      onTap: () => _abrirDocumento(
+        label: label,
+        url: url,
+        color: color,
+        icon: icon,
+      ),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
         decoration: BoxDecoration(
@@ -638,21 +742,48 @@ class ClienteContasTabState extends State<ClienteContasTab> {
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          mainAxisSize: MainAxisSize.max,
           children: [
             Icon(icon, color: color, size: 14),
             const SizedBox(width: 6),
             Flexible(
-              child: Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
+              child: Text(label,
+                  style: TextStyle(
+                      fontSize: 11, color: color, fontWeight: FontWeight.w600),
+                  overflow: TextOverflow.ellipsis),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _valorItem(String label, double valor, String? vencimento) {
+    final dataFormatada = _formatarData(vencimento);
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        decoration: BoxDecoration(
+            color: _bgCard, borderRadius: BorderRadius.circular(7)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style: const TextStyle(fontSize: 9, color: Color(0xFFb0c4ce))),
+            const SizedBox(height: 3),
+            Text(
+              valor > 0
+                  ? NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$')
+                      .format(valor)
+                  : '—',
+              style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white),
+            ),
+            if (dataFormatada.isNotEmpty)
+              Text('Venc: $dataFormatada',
+                  style:
+                      const TextStyle(fontSize: 9, color: Color(0xFFb0c4ce))),
           ],
         ),
       ),
@@ -661,12 +792,11 @@ class ClienteContasTabState extends State<ClienteContasTab> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SELETOR DE MÊS/ANO CUSTOMIZADO
+// SELETOR DE MÊS/ANO
 // ═══════════════════════════════════════════════════════════════════════════
 
 class _SeletorMesAno extends StatefulWidget {
   final DateTime? dataSelecionada;
-
   const _SeletorMesAno({this.dataSelecionada});
 
   @override
@@ -674,10 +804,10 @@ class _SeletorMesAno extends StatefulWidget {
 }
 
 class _SeletorMesAnoState extends State<_SeletorMesAno> {
-  late int _anoSelecionado;
-  late int _mesSelecionado;
+  late int _ano;
+  late int _mes;
 
-  final List<String> _meses = [
+  static const _meses = [
     'Janeiro',
     'Fevereiro',
     'Março',
@@ -695,9 +825,9 @@ class _SeletorMesAnoState extends State<_SeletorMesAno> {
   @override
   void initState() {
     super.initState();
-    final data = widget.dataSelecionada ?? DateTime.now();
-    _anoSelecionado = data.year;
-    _mesSelecionado = data.month;
+    final d = widget.dataSelecionada ?? DateTime.now();
+    _ano = d.year;
+    _mes = d.month;
   }
 
   @override
@@ -706,7 +836,7 @@ class _SeletorMesAnoState extends State<_SeletorMesAno> {
       backgroundColor: _bgDark,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: _accent.withOpacity(0.3), width: 1),
+        side: BorderSide(color: _accent.withOpacity(0.3)),
       ),
       child: Container(
         width: 320,
@@ -714,19 +844,15 @@ class _SeletorMesAnoState extends State<_SeletorMesAno> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Cabeçalho
             Row(
               children: [
                 const Icon(Icons.calendar_month, color: _accent, size: 20),
                 const SizedBox(width: 10),
-                const Text(
-                  'Selecionar Mês',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
+                const Text('Selecionar Mês',
+                    style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white)),
                 const Spacer(),
                 IconButton(
                   onPressed: () => Navigator.pop(context),
@@ -738,10 +864,8 @@ class _SeletorMesAnoState extends State<_SeletorMesAno> {
               ],
             ),
             const SizedBox(height: 14),
-
-            // Seletor de Ano
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               decoration: BoxDecoration(
                 color: _bgMid,
                 borderRadius: BorderRadius.circular(8),
@@ -751,31 +875,22 @@ class _SeletorMesAnoState extends State<_SeletorMesAno> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(
-                    onPressed: () {
-                      setState(() => _anoSelecionado--);
-                    },
+                    onPressed: () => setState(() => _ano--),
                     icon: const Icon(Icons.chevron_left, color: _accent),
                   ),
-                  Text(
-                    _anoSelecionado.toString(),
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      color: _accent,
-                    ),
-                  ),
+                  Text('$_ano',
+                      style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: _accent)),
                   IconButton(
-                    onPressed: () {
-                      setState(() => _anoSelecionado++);
-                    },
+                    onPressed: () => setState(() => _ano++),
                     icon: const Icon(Icons.chevron_right, color: _accent),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 12),
-
-            // Grid de Meses
             GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -786,34 +901,27 @@ class _SeletorMesAnoState extends State<_SeletorMesAno> {
                 childAspectRatio: 2.2,
               ),
               itemCount: 12,
-              itemBuilder: (context, index) {
-                final mesNum = index + 1;
-                final selecionado = mesNum == _mesSelecionado;
-
+              itemBuilder: (_, i) {
+                final sel = i + 1 == _mes;
                 return GestureDetector(
-                  onTap: () {
-                    setState(() => _mesSelecionado = mesNum);
-                  },
+                  onTap: () => setState(() => _mes = i + 1),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 150),
                     decoration: BoxDecoration(
-                      color: selecionado ? _accent : _bgMid,
+                      color: sel ? _accent : _bgMid,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: selecionado ? _accent : _accent.withOpacity(0.2),
-                        width: selecionado ? 2 : 1,
+                        color: sel ? _accent : _accent.withOpacity(0.2),
+                        width: sel ? 2 : 1,
                       ),
                     ),
                     child: Center(
                       child: Text(
-                        _meses[index].substring(0, 3),
+                        _meses[i].substring(0, 3),
                         style: TextStyle(
                           fontSize: 12,
-                          fontWeight:
-                              selecionado ? FontWeight.w700 : FontWeight.w500,
-                          color: selecionado
-                              ? const Color(0xFF003E52)
-                              : Colors.white70,
+                          fontWeight: sel ? FontWeight.w700 : FontWeight.w500,
+                          color: sel ? const Color(0xFF003E52) : Colors.white70,
                         ),
                       ),
                     ),
@@ -822,38 +930,27 @@ class _SeletorMesAnoState extends State<_SeletorMesAno> {
               },
             ),
             const SizedBox(height: 16),
-
-            // Botões de Ação
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.white54,
-                  ),
+                  style: TextButton.styleFrom(foregroundColor: Colors.white54),
                   child: const Text('Cancelar'),
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context, {
-                      'mes': _mesSelecionado,
-                      'ano': _anoSelecionado,
-                    });
-                  },
+                  onPressed: () =>
+                      Navigator.pop(context, {'mes': _mes, 'ano': _ano}),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _accent,
                     foregroundColor: const Color(0xFF003E52),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
+                        borderRadius: BorderRadius.circular(8)),
                   ),
-                  child: const Text(
-                    'Confirmar',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
+                  child: const Text('Confirmar',
+                      style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
               ],
             ),
@@ -864,9 +961,9 @@ class _SeletorMesAnoState extends State<_SeletorMesAno> {
   }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// WRAPPER PARA ABA DE FATURAS
-// ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════
+// WRAPPER
+// ═══════════════════════════════════════════════════════════════════════════
 
 class ClienteFaturasTab extends StatelessWidget {
   const ClienteFaturasTab({super.key});
@@ -875,9 +972,7 @@ class ClienteFaturasTab extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       color: _bgDark,
-      child: const SafeArea(
-        child: ClienteContasTab(),
-      ),
+      child: const SafeArea(child: ClienteContasTab()),
     );
   }
 }

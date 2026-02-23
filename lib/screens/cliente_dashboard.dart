@@ -393,58 +393,247 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
               ],
             ),
           ),
-          if (doc['bank_slip_url'] != null)
-            _linkBtn(Icons.barcode_reader, doc['bank_slip_url']),
-          if (doc['fatura_url'] != null)
-            _linkBtn(Icons.description_outlined, doc['fatura_url']),
           if (doc['file_url'] != null)
-            _downloadBtn(Icons.bolt_outlined, doc['file_url'],
-                doc['conta_contrato'] ?? 'ContaNeo'),
+            _docBtn(
+              icon: Icons.bolt_outlined,
+              label: 'Conta Neo',
+              url: doc['file_url'],
+              color: _accent,
+            ),
+          if (doc['fatura_url'] != null)
+            _docBtn(
+              icon: Icons.description_outlined,
+              label: 'Fatura Unienergy',
+              url: doc['fatura_url'],
+              color: const Color(0xFFFF8C42),
+            ),
+          if (doc['bank_slip_url'] != null)
+            _docBtn(
+              icon: Icons.qr_code_2_outlined,
+              label: 'Boleto',
+              url: doc['bank_slip_url'],
+              color: const Color(0xFF148bad),
+            ),
+          if (doc['fatura_unienergy_url'] != null)
+            _docBtn(
+              icon: Icons.open_in_new,
+              label: 'Asaas',
+              url: doc['fatura_unienergy_url'],
+              color: const Color(0xFF10b981),
+            ),
         ],
       ),
     );
   }
 
-  Widget _linkBtn(IconData icon, String? url) {
+  Widget _docBtn({
+    required IconData icon,
+    required String label,
+    required String? url,
+    required Color color,
+  }) {
     if (url == null) return const SizedBox.shrink();
     return GestureDetector(
-      onTap: () async {
-        // Completar URL se for caminho relativo
-        String fullUrl = url;
-        if (url.startsWith('/')) {
-          fullUrl = 'https://unienergyportal.com$url';
-        }
-        if (await canLaunchUrl(Uri.parse(fullUrl))) {
-          await launchUrl(Uri.parse(fullUrl),
-              mode: LaunchMode.externalApplication);
-        }
-      },
+      onTap: () => _abrirDocumento(
+        label: label,
+        url: url,
+        color: color,
+        icon: icon,
+      ),
       child: Container(
         margin: const EdgeInsets.only(left: 4),
         padding: const EdgeInsets.all(5),
         decoration: BoxDecoration(
-          color: _bgMid,
+          color: color.withOpacity(0.12),
           borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: color.withOpacity(0.4)),
         ),
-        child: Icon(icon, color: _accent, size: 14),
+        child: Icon(icon, color: color, size: 14),
       ),
     );
   }
 
-  Widget _downloadBtn(IconData icon, String? url, String nomeArquivo) {
-    if (url == null) return const SizedBox.shrink();
-    return GestureDetector(
-      onTap: () => _baixarArquivo(url, nomeArquivo),
-      child: Container(
-        margin: const EdgeInsets.only(left: 4),
-        padding: const EdgeInsets.all(5),
-        decoration: BoxDecoration(
+  // ═══════════════════════════════════════════════════════════════════════════
+  // MODAL DE VISUALIZAÇÃO DE DOCUMENTO
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  void _abrirDocumento({
+    required String label,
+    required String url,
+    required Color color,
+    required IconData icon,
+  }) {
+    final fullUrl =
+        url.startsWith('/') ? 'https://unienergyportal.com$url' : url;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.42,
+        decoration: const BoxDecoration(
           color: _bgMid,
-          borderRadius: BorderRadius.circular(4),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
-        child: Icon(icon, color: _accent, size: 14),
+        child: Column(
+          children: [
+            // Handle
+            Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2)),
+            ),
+
+            // Ícone grande
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                shape: BoxShape.circle,
+                border: Border.all(color: color.withOpacity(0.4), width: 2),
+              ),
+              child: Icon(icon, color: color, size: 34),
+            ),
+            const SizedBox(height: 14),
+
+            // Label do documento
+            Text(
+              label,
+              style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white),
+            ),
+            const SizedBox(height: 6),
+
+            // URL resumida
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                fullUrl.length > 60
+                    ? '...${fullUrl.substring(fullUrl.length - 60)}'
+                    : fullUrl,
+                style: const TextStyle(fontSize: 10, color: Color(0xFF7da5b5)),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+
+            const Spacer(),
+            Divider(color: Colors.white.withOpacity(0.06), height: 1),
+
+            // Botões
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+              child: Row(
+                children: [
+                  // Visualizar
+                  Expanded(
+                    child: _modalBtn(
+                      icon: Icons.visibility_outlined,
+                      label: 'Visualizar',
+                      color: color,
+                      filled: true,
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        await _visualizarNoNavegador(fullUrl);
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Baixar
+                  Expanded(
+                    child: _modalBtn(
+                      icon: Icons.download_outlined,
+                      label: 'Baixar PDF',
+                      color: color,
+                      filled: false,
+                      onTap: () async {
+                        Navigator.pop(ctx);
+                        final nome =
+                            '${label.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}';
+                        await _baixarArquivo(fullUrl, nome);
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  Widget _modalBtn({
+    required IconData icon,
+    required String label,
+    required Color color,
+    required bool filled,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        decoration: BoxDecoration(
+          color: filled ? color : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: color, width: filled ? 0 : 1.5),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: filled ? _bgDark : color, size: 18),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: filled ? _bgDark : color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _visualizarNoNavegador(String url) async {
+    // Para PDFs do Asaas (já são URLs diretas), abre direto.
+    // Para PDFs internos, usa o Google Docs Viewer como fallback
+    // caso o dispositivo não tenha app de PDF.
+    String targetUrl = url;
+
+    // Se for um PDF interno (não Asaas), tenta abrir via Google Docs Viewer
+    if (!url.contains('asaas.com')) {
+      targetUrl =
+          'https://docs.google.com/viewer?url=${Uri.encodeComponent(url)}';
+    }
+
+    final uri = Uri.parse(targetUrl);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        // Fallback: tenta URL original
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Não foi possível abrir: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ));
+      }
+    }
   }
 
   Future<void> _baixarArquivo(String url, String nomeArquivo) async {
@@ -875,7 +1064,7 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
       child: Container(
         height: chartH,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: const Color(0xFFE0E0E0),
           borderRadius: BorderRadius.circular(6),
         ),
         padding: const EdgeInsets.fromLTRB(4, 10, 8, 4),
@@ -995,13 +1184,7 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
                   const AxisTitles(sideTitles: SideTitles(showTitles: false)),
             ),
             gridData: FlGridData(
-              show: true,
-              drawVerticalLine: false,
-              horizontalInterval: maxY / 5,
-              getDrawingHorizontalLine: (value) => FlLine(
-                color: const Color(0xFFd1d5db).withValues(alpha: 0.5),
-                strokeWidth: 1,
-              ),
+              show: false,
             ),
             borderData: FlBorderData(show: false),
             barGroups: groups,
