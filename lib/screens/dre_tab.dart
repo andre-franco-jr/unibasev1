@@ -39,7 +39,7 @@ class DRETab extends StatefulWidget {
 
 class DRETabState extends State<DRETab>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
-  // ── Estado ──────────────────────────────────────────────────────────────────
+  //── Estado ──────────────────────────────────────────────────────────────────
   List<Map<String, dynamic>> _usinas = [];
   Map<String, dynamic>? _usinaAtual;
   int _anoSelecionado = DateTime.now().year;
@@ -86,7 +86,12 @@ class DRETabState extends State<DRETab>
     _lastLifecycleState = state;
   }
 
-  Future<void> refresh() => _loadUsinas();
+  Future<void> refresh() async {
+    await _loadUsinas();
+    if (_usinaAtual != null) {
+      await _loadDados();
+    }
+  }
 
   // ── CARGA ────────────────────────────────────────────────────────────────────
 
@@ -471,223 +476,238 @@ class DRETabState extends State<DRETab>
               color: _bgMid,
               borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
             ),
-            child: Column(
-              children: [
-                Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.symmetric(vertical: 10),
-                  decoration: BoxDecoration(
-                      color: Colors.white24,
-                      borderRadius: BorderRadius.circular(2)),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 16, 12),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.calendar_month_outlined,
-                          color: _accent, size: 18),
-                      const SizedBox(width: 8),
-                      const Text('Período',
+            child: SafeArea(
+              child: Column(
+                children: [
+                  Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2)),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 16, 12),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_month_outlined,
+                            color: _accent, size: 18),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Período',
                           style: TextStyle(
                               color: Colors.white,
                               fontSize: 15,
-                              fontWeight: FontWeight.w700)),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: () {
-                          final anoMudou = tempAno != _anoSelecionado;
-                          Navigator.pop(ctx);
-                          setState(() {
-                            _anoSelecionado = tempAno;
-                            _mesesSelecionados = tempMeses;
-                          });
-                          if (anoMudou) _loadDados();
-                        },
-                        style: TextButton.styleFrom(
-                          backgroundColor: _accent,
-                          foregroundColor: _bgDark,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 18, vertical: 8),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6)),
+                              fontWeight: FontWeight.w700),
                         ),
-                        child: const Text('Aplicar',
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () {
+                            final anoMudou = tempAno != _anoSelecionado;
+                            Navigator.pop(ctx);
+                            setState(() {
+                              _anoSelecionado = tempAno;
+                              _mesesSelecionados = tempMeses;
+                            });
+                            if (anoMudou) _loadDados();
+                          },
+                          style: TextButton.styleFrom(
+                            backgroundColor: _accent,
+                            foregroundColor: _bgDark,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 18, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                          ),
+                          child: const Text(
+                            'Aplicar',
                             style: TextStyle(
-                                fontWeight: FontWeight.w700, fontSize: 13)),
-                      ),
-                    ],
+                                fontWeight: FontWeight.w700, fontSize: 13),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                Divider(color: Colors.white.withOpacity(0.06), height: 1),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                    children: [
-                      const Text('ANO',
+                  Divider(color: Colors.white.withOpacity(0.06), height: 1),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                      children: [
+                        const Text(
+                          'ANO',
                           style: TextStyle(
                               fontSize: 10,
                               color: _muted,
                               letterSpacing: 1.2,
-                              fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 10),
-                      Row(
-                        children: [
-                          DateTime.now().year,
-                          DateTime.now().year - 1,
-                          DateTime.now().year - 2,
-                        ].map((a) {
-                          final sel = tempAno == a;
-                          return GestureDetector(
-                            onTap: () {
-                              HapticFeedback.selectionClick();
-                              setSheet(() => tempAno = a);
-                            },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              margin: const EdgeInsets.only(right: 10),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 22, vertical: 10),
-                              decoration: BoxDecoration(
-                                color:
-                                    sel ? _accent.withOpacity(0.15) : _bgCard,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: sel ? _accent : Colors.transparent,
-                                  width: 1.5,
+                              fontWeight: FontWeight.bold),
+                        ), // ← Adicionado este parêntese
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            DateTime.now().year,
+                            DateTime.now().year - 1,
+                            DateTime.now().year - 2,
+                          ].map((a) {
+                            final sel = tempAno == a;
+                            return GestureDetector(
+                              onTap: () {
+                                HapticFeedback.selectionClick();
+                                setSheet(() => tempAno = a);
+                              },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                margin: const EdgeInsets.only(right: 10),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 22, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color:
+                                      sel ? _accent.withOpacity(0.15) : _bgCard,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: sel ? _accent : Colors.transparent,
+                                    width: 1.5,
+                                  ),
                                 ),
+                                child: Text('$a',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: sel ? _accent : Colors.white70,
+                                    )),
                               ),
-                              child: Text('$a',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                    color: sel ? _accent : Colors.white70,
-                                  )),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 26),
-                      Row(
-                        children: [
-                          const Text('MESES',
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 26),
+                        Row(
+                          children: [
+                            const Text(
+                              'MESES',
                               style: TextStyle(
                                   fontSize: 10,
                                   color: _muted,
                                   letterSpacing: 1.2,
-                                  fontWeight: FontWeight.bold)),
-                          const Spacer(),
-                          GestureDetector(
-                            onTap: () => setSheet(() {
-                              tempMeses = tempMeses == null ? {} : null;
-                            }),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: _bgCard,
-                                borderRadius: BorderRadius.circular(6),
-                                border:
-                                    Border.all(color: _muted.withOpacity(0.2)),
-                              ),
-                              child: Text(
-                                tempMeses == null
-                                    ? 'Desmarcar todos'
-                                    : 'Marcar todos',
-                                style: const TextStyle(
-                                    fontSize: 10,
-                                    color: _accent,
-                                    fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      GridView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 4,
-                          childAspectRatio: 1.7,
-                          crossAxisSpacing: 10,
-                          mainAxisSpacing: 10,
-                        ),
-                        itemCount: 12,
-                        itemBuilder: (_, i) {
-                          final mes = i + 1;
-                          final liberado =
-                              _mesesLiberados[mes.toString()] == true;
-                          final checked = tempMeses == null
-                              ? liberado
-                              : tempMeses!.contains(mes);
+                                  fontWeight: FontWeight.bold),
+                            ), // ← Adicionado parêntese aqui
+                            const Spacer(),
 
-                          return GestureDetector(
-                            onTap: !liberado
-                                ? null
-                                : () {
-                                    HapticFeedback.selectionClick();
-                                    setSheet(() {
-                                      if (tempMeses == null) {
-                                        tempMeses = Set<int>.from(List.generate(
-                                                12, (j) => j + 1)
-                                            .where((m) =>
-                                                _mesesLiberados[m.toString()] ==
-                                                true));
-                                        tempMeses!.remove(mes);
-                                      } else {
-                                        if (tempMeses!.contains(mes)) {
-                                          tempMeses!.remove(mes);
-                                        } else {
-                                          tempMeses!.add(mes);
-                                        }
-                                      }
-                                    });
-                                  },
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 150),
-                              decoration: BoxDecoration(
-                                color: checked
-                                    ? _accent.withOpacity(0.15)
-                                    : _bgCard,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: checked ? _accent : Colors.transparent,
-                                  width: 1.5,
+                            GestureDetector(
+                              onTap: () => setSheet(() {
+                                tempMeses = tempMeses == null ? {} : null;
+                              }),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: _bgCard,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                      color: _muted.withOpacity(0.2)),
+                                ),
+                                child: Text(
+                                  tempMeses == null
+                                      ? 'Desmarcar todos'
+                                      : 'Marcar todos',
+                                  style: const TextStyle(
+                                      fontSize: 10,
+                                      color: _accent,
+                                      fontWeight: FontWeight.bold),
                                 ),
                               ),
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Text(_mesesNomes[i],
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                        color: !liberado
-                                            ? Colors.white.withOpacity(0.2)
-                                            : checked
-                                                ? _accent
-                                                : Colors.white70,
-                                      )),
-                                  if (!liberado)
-                                    Positioned(
-                                      top: 4,
-                                      right: 6,
-                                      child: Icon(Icons.lock_outline,
-                                          size: 8,
-                                          color: Colors.white.withOpacity(0.2)),
-                                    ),
-                                ],
-                              ),
                             ),
-                          );
-                        },
-                      ),
-                    ],
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 4,
+                            childAspectRatio: 1.7,
+                            crossAxisSpacing: 10,
+                            mainAxisSpacing: 10,
+                          ),
+                          itemCount: 12,
+                          itemBuilder: (_, i) {
+                            final mes = i + 1;
+                            final liberado =
+                                _mesesLiberados[mes.toString()] == true;
+                            final checked = tempMeses == null
+                                ? liberado
+                                : tempMeses!.contains(mes);
+
+                            return GestureDetector(
+                              onTap: !liberado
+                                  ? null
+                                  : () {
+                                      HapticFeedback.selectionClick();
+                                      setSheet(() {
+                                        if (tempMeses == null) {
+                                          tempMeses = Set<int>.from(
+                                              List.generate(12, (j) => j + 1)
+                                                  .where((m) =>
+                                                      _mesesLiberados[
+                                                          m.toString()] ==
+                                                      true));
+                                          tempMeses!.remove(mes);
+                                        } else {
+                                          if (tempMeses!.contains(mes)) {
+                                            tempMeses!.remove(mes);
+                                          } else {
+                                            tempMeses!.add(mes);
+                                          }
+                                        }
+                                      });
+                                    },
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                decoration: BoxDecoration(
+                                  color: checked
+                                      ? _accent.withOpacity(0.15)
+                                      : _bgCard,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color:
+                                        checked ? _accent : Colors.transparent,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    Text(_mesesNomes[i],
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: !liberado
+                                              ? Colors.white.withOpacity(0.2)
+                                              : checked
+                                                  ? _accent
+                                                  : Colors.white70,
+                                        )),
+                                    if (!liberado)
+                                      Positioned(
+                                        top: 4,
+                                        right: 6,
+                                        child: Icon(Icons.lock_outline,
+                                            size: 8,
+                                            color:
+                                                Colors.white.withOpacity(0.2)),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
@@ -969,66 +989,72 @@ class DRETabState extends State<DRETab>
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled: true, // ← Adicione isto
       builder: (ctx) => Container(
         decoration: const BoxDecoration(
           color: _bgMid,
           borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
         ),
         padding: const EdgeInsets.only(bottom: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2)),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 4,
-                    height: 32,
-                    margin: const EdgeInsets.only(right: 12),
-                    decoration: BoxDecoration(
-                        color: cor, borderRadius: BorderRadius.circular(2)),
-                  ),
-                  Expanded(
-                    child: Text(_labelAmigavel(nome),
-                        style: const TextStyle(
-                            fontSize: 14,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            // ← Envolva com scroll
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2)),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 4,
+                        height: 32,
+                        margin: const EdgeInsets.only(right: 12),
+                        decoration: BoxDecoration(
+                            color: cor, borderRadius: BorderRadius.circular(2)),
+                      ),
+                      Expanded(
+                        child: Text(_labelAmigavel(nome),
+                            style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white)),
+                      ),
+                      Text(
+                        isDespesa && total > 0
+                            ? '- ${_fmtR(total.abs())}'
+                            : _fmtR(total),
+                        style: TextStyle(
+                            fontSize: 15,
                             fontWeight: FontWeight.bold,
-                            color: Colors.white)),
+                            color: isDespesa && total > 0 ? _red : cor),
+                      ),
+                    ],
                   ),
-                  Text(
-                    isDespesa && total > 0
-                        ? '- ${_fmtR(total.abs())}'
-                        : _fmtR(total),
-                    style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: isDespesa && total > 0 ? _red : cor),
+                ),
+                Divider(color: Colors.white.withOpacity(0.06), height: 1),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _buildMiniChart(vals, maxV, cor),
+                      const SizedBox(height: 14),
+                      _buildMonthGrid(vals, isDespesa, cor),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Divider(color: Colors.white.withOpacity(0.06), height: 1),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildMiniChart(vals, maxV, cor),
-                  const SizedBox(height: 14),
-                  _buildMonthGrid(vals, isDespesa, cor),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     );

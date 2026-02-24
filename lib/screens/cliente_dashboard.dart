@@ -473,104 +473,118 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Container(
-        height: MediaQuery.of(context).size.height * 0.42,
-        decoration: const BoxDecoration(
-          color: _bgMid,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: Column(
-          children: [
-            // Handle
-            Container(
-              width: 36,
-              height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(
-                  color: Colors.white24,
-                  borderRadius: BorderRadius.circular(2)),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(ctx).viewInsets.bottom,
+          ),
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(ctx).size.height * 0.5,
             ),
-
-            // Ícone grande
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
-                shape: BoxShape.circle,
-                border: Border.all(color: color.withOpacity(0.4), width: 2),
-              ),
-              child: Icon(icon, color: color, size: 34),
+            decoration: const BoxDecoration(
+              color: _bgMid,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
-            const SizedBox(height: 14),
-
-            // Label do documento
-            Text(
-              label,
-              style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white),
-            ),
-            const SizedBox(height: 6),
-
-            // URL resumida
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Text(
-                fullUrl.length > 60
-                    ? '...${fullUrl.substring(fullUrl.length - 60)}'
-                    : fullUrl,
-                style: const TextStyle(fontSize: 10, color: Color(0xFF7da5b5)),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-
-            const Spacer(),
-            Divider(color: Colors.white.withOpacity(0.06), height: 1),
-
-            // Botões
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
-              child: Row(
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Visualizar
-                  Expanded(
-                    child: _modalBtn(
-                      icon: Icons.visibility_outlined,
-                      label: 'Visualizar',
-                      color: color,
-                      filled: true,
-                      onTap: () async {
-                        Navigator.pop(ctx);
-                        await _visualizarNoNavegador(fullUrl);
-                      },
+                  // Handle
+                  Container(
+                    width: 36,
+                    height: 4,
+                    margin: const EdgeInsets.symmetric(vertical: 12),
+                    decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2)),
+                  ),
+
+                  // Ícone grande
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                      border:
+                          Border.all(color: color.withOpacity(0.4), width: 2),
+                    ),
+                    child: Icon(icon, color: color, size: 34),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // Label do documento
+                  Text(
+                    label,
+                    style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white),
+                  ),
+                  const SizedBox(height: 6),
+
+                  // URL resumida
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Text(
+                      fullUrl.length > 60
+                          ? '...${fullUrl.substring(fullUrl.length - 60)}'
+                          : fullUrl,
+                      style: const TextStyle(
+                          fontSize: 10, color: Color(0xFF7da5b5)),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  // Baixar
-                  Expanded(
-                    child: _modalBtn(
-                      icon: Icons.download_outlined,
-                      label: 'Baixar PDF',
-                      color: color,
-                      filled: false,
-                      onTap: () async {
-                        Navigator.pop(ctx);
-                        final nome =
-                            '${label.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}';
-                        await _baixarArquivo(fullUrl, nome);
-                      },
+
+                  const SizedBox(height: 20),
+                  Divider(color: Colors.white.withOpacity(0.06), height: 1),
+
+                  // Botões
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+                    child: Row(
+                      children: [
+                        // Visualizar
+                        Expanded(
+                          child: _modalBtn(
+                            icon: Icons.visibility_outlined,
+                            label: 'Visualizar',
+                            color: color,
+                            filled: true,
+                            onTap: () async {
+                              Navigator.pop(ctx);
+                              await _visualizarNoNavegador(fullUrl);
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Baixar
+                        Expanded(
+                          child: _modalBtn(
+                            icon: Icons.download_outlined,
+                            label: 'Baixar PDF',
+                            color: color,
+                            filled: false,
+                            onTap: () async {
+                              Navigator.pop(ctx);
+                              final nome =
+                                  '${label.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}';
+                              await _baixarArquivo(fullUrl, nome);
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 

@@ -94,10 +94,13 @@ class _DocumentosTabState extends State<DocumentosTab> {
         return Icons.picture_as_pdf_outlined;
       case 'xlsx':
       case 'xls':
+      case 'csv':
         return Icons.table_chart_outlined;
       case 'docx':
       case 'doc':
         return Icons.description_outlined;
+      case 'txt':
+        return Icons.text_snippet_outlined;
       case 'png':
       case 'jpg':
       case 'jpeg':
@@ -113,10 +116,13 @@ class _DocumentosTabState extends State<DocumentosTab> {
         return const Color(0xFFef4444);
       case 'xlsx':
       case 'xls':
+      case 'csv':
         return const Color(0xFF10b981);
       case 'docx':
       case 'doc':
         return const Color(0xFF3b82f6);
+      case 'txt':
+        return const Color(0xFF6b7280);
       case 'png':
       case 'jpg':
       case 'jpeg':
@@ -380,13 +386,22 @@ class _DocumentosTabState extends State<DocumentosTab> {
 
       final id = arq['id'];
       final titulo = arq['titulo'] ?? arq['file_name'] ?? 'documento';
-      final nomeArquivo = titulo.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      final fileName = arq['file_name']?.toString() ?? '';
       final timestamp = DateTime.now().millisecondsSinceEpoch;
-      final extensao = (arq['extensao'] ?? 'pdf').toString().toLowerCase();
+
+      // Obter extensão do arquivo - priorizar file_name
+      String extensao = 'pdf';
+      if (fileName.contains('.')) {
+        extensao = fileName.split('.').last.toLowerCase();
+      } else if (arq['extensao'] != null) {
+        extensao = arq['extensao'].toString().toLowerCase();
+      }
+
+      final nomeArquivo = titulo.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
 
       // URL de download - ajustar conforme API
       final url =
-          'https://unienergyportal.com/api/mobile/documentos/download/$id';
+          'https://unienergyportal.com/api/mobile/investor/documentos/download/$id';
 
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('access_token');
@@ -443,10 +458,25 @@ class _DocumentosTabState extends State<DocumentosTab> {
       if (!mounted) return;
       Navigator.pop(context);
 
+      // Extrair mensagem de erro mais detalhada
+      String errorMsg = 'Erro ao baixar arquivo';
+      if (e is DioException) {
+        if (e.response?.statusCode == 404) {
+          errorMsg = 'Arquivo não encontrado no servidor';
+        } else if (e.response?.statusCode == 401) {
+          errorMsg = 'Sessão expirada. Faça login novamente';
+        } else {
+          errorMsg = 'Erro: ${e.response?.statusCode ?? e.message}';
+        }
+      } else {
+        errorMsg = 'Erro: ${e.toString()}';
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Erro ao baixar arquivo: ${e.toString()}'),
+          content: Text(errorMsg),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
         ),
       );
     }
