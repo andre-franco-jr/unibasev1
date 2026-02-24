@@ -935,14 +935,17 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
   }
 
   Widget _buildLegenda() {
-    // Legenda em linha única fixa (3 itens distribuídos)
+    final isLandscape =
+        MediaQuery.of(context).orientation == Orientation.landscape;
+    final spacing = isLandscape ? 24.0 : 14.0;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _legItem(_barVS, 'Sem Solar (VS)'),
-        const SizedBox(width: 14),
+        SizedBox(width: spacing),
         _legItem(_barVE, 'Economia (VE)'),
-        const SizedBox(width: 14),
+        SizedBox(width: spacing),
         _legItem(_barVU, 'Unienergy (VU)'),
       ],
     );
@@ -996,16 +999,27 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
     }
     if (maxY == 0) maxY = 1;
 
-    // Altura dinâmica baseada em orientação
+    // Altura e espaçamento dinâmicos baseados em orientação
     final isLandscape =
         MediaQuery.of(context).orientation == Orientation.landscape;
-    final chartH = isLandscape ? 200.0 : 260.0;
+    final size = MediaQuery.of(context).size;
 
-    // Largura de barra dinâmica para evitar sobreposição
-    final screenW = MediaQuery.of(context).size.width;
-    final pad = 14.0; // padding estimado
-    final chartW = screenW - (pad * 2) - 20;
-    final barW = ((chartW / 12) / 6.5).clamp(2.5, 6.5);
+    // Em landscape: usar 80% da altura útil; em portrait: 260px
+    final chartH =
+        isLandscape ? (size.height - 150).clamp(280.0, 400.0) : 260.0;
+
+    // Largura de barra e espaçamento dinâmico
+    final screenW = size.width;
+    final horizontalPad = isLandscape ? 12.0 : 14.0;
+    final chartW = screenW - (horizontalPad * 2) - 20;
+
+    // Em landscape, barras maiores; em portrait, menores
+    final barW = isLandscape
+        ? ((chartW / 12) / 5.5).clamp(4.0, 8.0)
+        : ((chartW / 12) / 6.5).clamp(2.5, 6.0);
+
+    // Espaçamento entre groups dinâmico
+    final groupSpace = isLandscape ? 12.0 : 6.0;
 
     final groups = mesesOrdenados.asMap().entries.map((e) {
       final dados = dadosAgregados[e.value]!;
@@ -1082,11 +1096,12 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
           color: const Color(0xFFE0E0E0),
           borderRadius: BorderRadius.circular(6),
         ),
-        padding: const EdgeInsets.fromLTRB(4, 10, 8, 4),
+        padding: EdgeInsets.fromLTRB(
+            isLandscape ? 8 : 4, 10, isLandscape ? 12 : 8, 4),
         child: BarChart(
           BarChartData(
             alignment: BarChartAlignment.center,
-            groupsSpace: 6,
+            groupsSpace: groupSpace,
             maxY: maxY,
             barTouchData: BarTouchData(
               enabled: true,
@@ -1160,16 +1175,16 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
               bottomTitles: AxisTitles(
                 sideTitles: SideTitles(
                   showTitles: true,
-                  reservedSize: _bottomR,
+                  reservedSize: isLandscape ? 28.0 : _bottomR,
                   getTitlesWidget: (v, m) {
                     final i = v.toInt();
                     if (i < 0 || i >= labels.length) return const Text('');
                     return Padding(
                       padding: const EdgeInsets.only(top: 6),
                       child: Text(labels[i],
-                          style: const TextStyle(
-                              fontSize: 9,
-                              color: Color(0xFF374151),
+                          style: TextStyle(
+                              fontSize: isLandscape ? 10 : 9,
+                              color: const Color(0xFF374151),
                               fontWeight: FontWeight.w500)),
                     );
                   },
@@ -1178,15 +1193,15 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
               leftTitles: AxisTitles(
                 sideTitles: SideTitles(
                   showTitles: true,
-                  reservedSize: _leftR,
+                  reservedSize: isLandscape ? 56.0 : _leftR,
                   interval: maxY / 5,
                   getTitlesWidget: (v, m) => Padding(
                     padding: const EdgeInsets.only(right: 4),
                     child: Text(
                       _shortR(v),
-                      style: const TextStyle(
-                          fontSize: 9,
-                          color: Color(0xFF6b7280),
+                      style: TextStyle(
+                          fontSize: isLandscape ? 10 : 9,
+                          color: const Color(0xFF6b7280),
                           fontWeight: FontWeight.w500),
                       textAlign: TextAlign.right,
                     ),
