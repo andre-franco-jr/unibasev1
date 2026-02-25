@@ -561,9 +561,9 @@ class ClienteContasTabState extends State<ClienteContasTab> {
 
   Widget _buildContaCard(Map<String, dynamic> conta, int index) {
     final temBoleto = conta['bank_slip_url'] != null;
-    final temFatura = conta['fatura_url'] != null;
+    final temFatura = conta['fatura_unienergy_url'] != null;
     final temNeo = conta['file_url'] != null;
-    final temUni = conta['fatura_unienergy_url'] != null;
+    final temUni = conta['fatura_url'] != null;
     final isExpanded = _expandidos.contains(index);
 
     return Container(
@@ -685,7 +685,7 @@ class ClienteContasTabState extends State<ClienteContasTab> {
                                 child: _docBtn(
                               icon: Icons.description_outlined,
                               label: 'Fatura Uni',
-                              url: conta['fatura_url'],
+                              url: conta['fatura_unienergy_url'],
                               color: const Color(0xFFFF8C42),
                             )),
                           if (temNeo && !temFatura)
@@ -714,7 +714,7 @@ class ClienteContasTabState extends State<ClienteContasTab> {
                                 child: _docBtn(
                               icon: Icons.payment,
                               label: 'Asaas',
-                              url: conta['fatura_unienergy_url'],
+                              url: conta['fatura_url'],
                               color: const Color(0xFF10b981),
                             )),
                           if (temBoleto && !temUni)

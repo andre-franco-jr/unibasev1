@@ -403,11 +403,11 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
               url: doc['file_url'],
               color: _accent,
             ),
-          if (doc['fatura_url'] != null)
+          if (doc['fatura_unienergy_url'] != null)
             _docBtn(
               icon: Icons.description_outlined,
               label: 'Fatura Unienergy',
-              url: doc['fatura_url'],
+              url: doc['fatura_unienergy_url'],
               color: const Color(0xFFFF8C42),
             ),
           if (doc['bank_slip_url'] != null)
@@ -417,11 +417,11 @@ class ClienteDashboardTabState extends State<ClienteDashboardTab> {
               url: doc['bank_slip_url'],
               color: const Color(0xFF148bad),
             ),
-          if (doc['fatura_unienergy_url'] != null)
+          if (doc['fatura_url'] != null)
             _docBtn(
               icon: Icons.payment,
               label: 'Asaas',
-              url: doc['fatura_unienergy_url'],
+              url: doc['fatura_url'],
               color: const Color(0xFF10b981),
             ),
         ],
