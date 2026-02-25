@@ -1,4 +1,4 @@
-package com.example.unienergy_app
+package app.unienergy
 
 import io.flutter.embedding.android.FlutterActivity
 
